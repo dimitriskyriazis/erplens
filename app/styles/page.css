@@ -1,0 +1,232 @@
+/* Page frame, header row, grid frame and small controls shared by every screen. */
+
+.page {
+  padding: 16px;
+  height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.page-header-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+  width: 100%;
+}
+
+.page-header-side {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.page-header-side--left {
+  justify-content: flex-start;
+}
+
+.page-header-side--right {
+  justify-content: flex-end;
+}
+
+.page-heading {
+  flex: 0 0 auto;
+  text-align: center;
+  white-space: nowrap;
+  padding: 0 16px;
+}
+
+/* A <select> sizes to its longest option; cap it so it cannot push into the title. */
+.page-header-side select.header-control {
+  max-width: 260px;
+  text-overflow: ellipsis;
+}
+
+.page-count {
+  color: rgba(241, 245, 249, 0.75);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* Quick search and selectors, styled like the pill buttons. */
+.header-control {
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.header-control:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.header-control--search {
+  width: 340px;
+  max-width: 100%;
+}
+
+.header-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(241, 245, 249, 0.85);
+  font-size: 13px;
+}
+
+.banner {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.banner--error {
+  background: #fdecec;
+  color: #a12622;
+  border: 1px solid rgba(161, 38, 34, 0.25);
+}
+
+/* Grid */
+.grid-frame {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.grid-frame > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.grid-loading {
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.cell-warn {
+  background-color: #fff4e5 !important;
+  color: #8a4b00 !important;
+}
+
+/* Plain white panel for text content. */
+.panel {
+  background: var(--surface-raised);
+  border-radius: 20px;
+  padding: 24px 36px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  color: #334155;
+  line-height: 1.5;
+}
+
+.panel h2 {
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.panel p {
+  margin: 0;
+}
+
+/* RMT timeline */
+.timeline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  color: rgba(241, 245, 249, 0.85);
+  font-size: 13px;
+}
+
+.timeline-card {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 8px 12px 12px;
+}
+
+.timeline-empty {
+  color: var(--text-muted);
+  padding: 24px;
+}
+
+.picker {
+  position: relative;
+}
+
+.picker-list {
+  position: absolute;
+  top: 38px;
+  left: 0;
+  z-index: 30;
+  width: 640px;
+  max-width: 80vw;
+  max-height: 380px;
+  overflow: auto;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.2);
+  padding: 4px;
+}
+
+.picker-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: #0f172a;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.picker-item:hover,
+.picker-item[aria-selected="true"] {
+  background: #f1f5f9;
+}
+
+.picker-item .code {
+  font-weight: 600;
+  min-width: 84px;
+}
+
+.picker-item .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-item .meta {
+  color: #64748b;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.picker-empty {
+  padding: 12px;
+  color: #64748b;
+  font-size: 13px;
+}

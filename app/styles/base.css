@@ -1,0 +1,107 @@
+/* Shared tokens and element defaults. Lifted from FastQuote's base.css so both apps look
+   the same; the body transform: scale(0.9) trick was deliberately left out. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --page-heading-font-size: 28px;
+  --page-heading-font-weight: 540;
+  --page-heading-letter-spacing: 0.02em;
+  --page-subheading-font-size: 18px;
+  --page-subheading-font-weight: 600;
+  --surface-muted: #f8fafc;
+  --surface-raised: #ffffff;
+  --border-subtle: rgba(15, 23, 42, 0.08);
+  --text-muted: #475569;
+  --panel-shadow: rgba(15, 23, 42, 0.08);
+  /* TelERP accent: light blue (FastQuote uses red). */
+  --accent: #3ba7f0;
+  --accent-shadow: rgba(59, 167, 240, 0.35);
+  --accent-ring: rgba(59, 167, 240, 0.25);
+  --shell-bg: #0b1220;
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+html {
+  height: 100%;
+  overflow: hidden;
+  font-size: 14px;
+}
+
+body {
+  margin: 0;
+  height: 100vh;
+  background: var(--shell-bg);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+select,
+button,
+select option {
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  caret-color: currentColor;
+}
+
+h1 {
+  font-size: var(--page-heading-font-size);
+  font-weight: var(--page-heading-font-weight);
+  letter-spacing: var(--page-heading-letter-spacing);
+  margin: 0;
+  color: #ffffff;
+}
+
+h2 {
+  font-size: var(--page-subheading-font-size);
+  font-weight: var(--page-subheading-font-weight);
+  margin: 0;
+  color: #ffffff;
+}
+
+.page-header-button {
+  border-radius: 999px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: #0f172a;
+  border: 1px solid #d1d5db;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+}
+
+.page-header-button:hover,
+.page-header-button:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+  outline: none;
+}
+
+.page-header-button:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.1);
+}

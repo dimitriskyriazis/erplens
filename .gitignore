@@ -23,6 +23,10 @@
 # misc
 .DS_Store
 *.pem
+uploads/
+
+# logs
+/logs/
 
 # debug
 npm-debug.log*
@@ -30,8 +34,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
+ecosystem.config.cjs
 
 # vercel
 .vercel
@@ -39,3 +44,52 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# claude
+.claude/
+
+# cursor
+.cursor/
+
+# codex
+.codex
+
+# docs
+docs/
+
+# bat files
+*.bat
+
+# sql migration files
+sql/
+
+# script for telquote import
+telquote-import/
+
+#sql query files
+sql/
+
+# security files
+.security*
+
+# word files
+*.docx
+
+# pdf files
+*.pdf
+
+# excel files
+*.xlsx
+
+# html files
+*.html
+
+#csv files
+*.csv
+# production process definition (holds secrets, lives only on TelApp1)
+ecosystem.config.cjs
+
+# hand-over SQL scripts and the IIS maintenance page are source, not scratch
+!scripts/sql/
+!scripts/iis/maintenance.html
+!scripts/iis/deploy.bat

@@ -1,0 +1,159 @@
+.homePage {
+  width: 100%;
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 20px 40px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100vh;
+  overflow: auto;
+}
+
+.topBar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px 36px;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brandTitle {
+  margin: 0;
+  font-size: 3.2rem;
+  font-weight: 500;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.brandAccent {
+  color: var(--accent);
+}
+
+.poweredBy {
+  display: flex;
+  align-items: center;
+}
+
+.logoImage {
+  width: 240px;
+  height: auto;
+  object-fit: contain;
+  margin-top: -8px;
+}
+
+.divider {
+  border: none;
+  border-top: 1.5px solid rgba(15, 23, 42, 0.25);
+  margin: 0;
+}
+
+.quickLinks {
+  display: flex;
+  gap: 10px;
+}
+
+.quickLink {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 12px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  text-decoration: none;
+  color: #334155;
+  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.quickLink:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+  background: #f1f5f9;
+  border-color: var(--accent);
+}
+
+.quickLink:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.8);
+  outline-offset: 2px;
+}
+
+.quickLinkMuted {
+  opacity: 0.55;
+}
+
+.quickLinkIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+}
+
+.quickLinkLabel {
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.quickLinkHint {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.section {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.sectionDivider {
+  border: none;
+  border-top: 1.5px solid rgba(15, 23, 42, 0.25);
+  margin: 0;
+}
+
+.sectionText {
+  margin: 0;
+  color: #475569;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .quickLinks {
+    flex-wrap: wrap;
+  }
+  .quickLink {
+    flex: 0 0 calc(33.33% - 8px);
+  }
+}
+
+@media (max-width: 720px) {
+  .homePage {
+    padding: 16px;
+  }
+  .topBar {
+    padding: 20px;
+  }
+}
