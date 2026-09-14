@@ -335,21 +335,150 @@ while working on TELERP; `pm2 delete telerp` is the only delete the TELERP deplo
 FastQuote's `.next` reached about 5 GB before that was discovered, and `deploy.ps1`
 discards `.next` on every deploy anyway.
 
-## Phase 2: Windows authentication (later)
+## Phase 2: Windows authentication
 
-When users and permissions are added, the IIS side changes in these places, all copied from
-`C:\fastquote\scripts\iis\fastquote.web.config` and `WindowsUserHeaderModule.cs`:
+Same mechanism as FastQuote, with the user list in `tlm.Users` on SOFT1_ERP instead of
+FastQuote's own database:
 
-- Add the `<modules>` block with `IisProxyAuth.WindowsUserHeaderModule` and drop the
-  compiled DLL into `C:\apps\telerp\wwwroot\bin`. Requires ASP.NET 4.5 on the server
-  (`Web-Asp-Net45`, already installed for FastQuote).
-- Add `<location>` blocks that turn Windows auth on and anonymous off for `/api/me` and
-  `/api/sso` only. Never at the site root: that makes IIS attach a Negotiate challenge to
-  every application 401 and users over VPN get credential prompts on each edit.
-- Register the SPN `HTTP/telerp.telmaco.gr` on the computer account `TELAPP1$`
-  (`setspn -S HTTP/telerp.telmaco.gr TELAPP1$`), as was done for FastQuote.
-- Port FastQuote's session, sso and middleware modules and set `SESSION_SECRET` in
-  `ecosystem.config.cjs`. Keep `SESSION_COOKIE_SECURE=false` while the site is HTTP only.
+1. IIS keeps the site anonymous except `/api/me` and `/api/sso`, where Windows
+   authentication is required. The managed module `IisProxyAuth.WindowsUserHeaderModule`
+   stamps the authenticated account into `X-Windows-User` after the handshake; the rewrite
+   rule destroys any client-supplied copy first, and Node listens on loopback only.
+2. `POST /api/me` maps that identity to a row of `tlm.Users` by `DomainName`
+   (`TELMACO\sAMAccountName`) and mints an HMAC-signed, httpOnly session cookie plus a
+   JS-readable expiry hint. No row means "Access denied".
+3. `proxy.ts` verifies the cookie on every request, rejects API calls without one (401
+   JSON) and slides a still-valid session forward, capped at the absolute TTL from the
+   original login. The Windows handshake therefore happens once per login, not on a timer.
+4. `AuthProvider` on the client establishes the session before anything renders and shows
+   "Access denied" or "Sign-in unavailable" instead of a broken app.
+
+Access is a row in `tlm.Users`. Add or remove rows by hand on TELDB2 (a removed user is
+signed out at their next page load). Definition and seed: `scripts/sql/2026-09-14-tlm-Users.sql`.
+
+### A. Admin hand-offs (Domain Admins; independent of B and C)
+
+Both are needed for a prompt-free experience. Without them the site still works: browsers
+fall back to NTLM and, where a site is not trusted, show one credential prompt.
+
+**SPN for Kerberos.** The telerp pool runs as ApplicationPoolIdentity, so the SPN goes on
+the computer account, exactly as for FastQuote:
+
+```powershell
+setspn -S HTTP/telerp.telmaco.gr TELAPP1$
+setspn -L TELAPP1$          # should now list HTTP/fastquote.telmaco.gr and HTTP/telerp.telmaco.gr
+```
+
+**Group Policy: edit the GPO `FastQuote-SSO`.** Browsers send Windows credentials
+automatically only to sites they are told to trust. The one policy that does this is
+`FastQuote-SSO` (GUID `{9D7BBC77-71C0-4624-BBD3-0651060CFD48}`, linked at
+`OU=TELMACO,DC=telmaco,DC=gr`, last changed 2026-02-03; read from SYSVOL 2026-09-14) and
+it names FastQuote alone. In Group Policy Management on TelDC1, open it and under
+**Computer Configuration** add TelERP beside FastQuote in these six places:
+
+| Where | Setting | Today | Change to |
+| --- | --- | --- | --- |
+| Preferences > Windows Settings > Registry | Item `http` under `HKLM\Software\Policies\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains\telmaco.gr\fastquote` (REG_DWORD 1, action Update) | fastquote only | Add a second item: same hive, key `...\ZoneMap\Domains\telmaco.gr\telerp`, value name `http`, REG_DWORD, data `1`, action Update |
+| Policies > Administrative Templates > Google > Google Chrome > HTTP authentication | Authentication server allowlist | `fastquote.telmaco.gr` | `fastquote.telmaco.gr,telerp.telmaco.gr` |
+| same | Kerberos delegation server allowlist | `fastquote.telmaco.gr` | `fastquote.telmaco.gr,telerp.telmaco.gr` |
+| same | Allow all HTTP authentication schemes for these origins (list) | `http://fastquote.telmaco.gr` | add entry `http://telerp.telmaco.gr` |
+| Policies > Administrative Templates > Microsoft Edge > HTTP authentication | Configure list of allowed authentication servers | `http://fastquote.telmaco.gr` | `http://fastquote.telmaco.gr,http://telerp.telmaco.gr` |
+| same | Allow all HTTP authentication schemes for these origins (list) | `http://fastquote.telmaco.gr` | add entry `http://telerp.telmaco.gr` |
+
+The second Preferences item in that GPO (`Zones\1`, value `1A00` = 0, "log on
+automatically in the Intranet zone") already covers every Intranet site and needs no change.
+Wildcard alternative: `*.telmaco.gr` in the four Chrome/Edge settings, and a Preferences item
+on key `...\ZoneMap\Domains\telmaco.gr` (no host subkey) with `http` = 1, which puts every
+host under telmaco.gr in the Intranet zone.
+
+The same six changes from an elevated PowerShell on TelDC1 (GroupPolicy module), which
+writes them straight into the GPO. The Intranet-zone entry is written as a policy registry
+value here rather than a Preferences item; on the client it lands in the identical key and
+behaves the same. Value name `2` continues the numbered lists that already hold entry `1`:
+
+```powershell
+Import-Module GroupPolicy
+$gpo = 'FastQuote-SSO'
+Set-GPRegistryValue -Name $gpo -Key 'HKLM\Software\Policies\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains\telmaco.gr\telerp' -ValueName 'http' -Type DWord -Value 1
+Set-GPRegistryValue -Name $gpo -Key 'HKLM\Software\Policies\Google\Chrome' -ValueName 'AuthServerAllowlist' -Type String -Value 'fastquote.telmaco.gr,telerp.telmaco.gr'
+Set-GPRegistryValue -Name $gpo -Key 'HKLM\Software\Policies\Google\Chrome' -ValueName 'AuthNegotiateDelegateAllowlist' -Type String -Value 'fastquote.telmaco.gr,telerp.telmaco.gr'
+Set-GPRegistryValue -Name $gpo -Key 'HKLM\Software\Policies\Google\Chrome\AllHttpAuthSchemesAllowedForOrigins' -ValueName '2' -Type String -Value 'http://telerp.telmaco.gr'
+Set-GPRegistryValue -Name $gpo -Key 'HKLM\Software\Policies\Microsoft\Edge' -ValueName 'AuthServerAllowlist' -Type String -Value 'http://fastquote.telmaco.gr,http://telerp.telmaco.gr'
+Set-GPRegistryValue -Name $gpo -Key 'HKLM\Software\Policies\Microsoft\Edge\AllHttpAuthSchemesAllowedForOrigins' -ValueName '2' -Type String -Value 'http://telerp.telmaco.gr'
+Get-GPRegistryValue -Name $gpo -Key 'HKLM\Software\Policies\Google\Chrome' | Format-Table ValueName, Value
+Get-GPRegistryValue -Name $gpo -Key 'HKLM\Software\Policies\Microsoft\Edge' | Format-Table ValueName, Value
+```
+
+Clients pick the change up at their next policy refresh (about 90 minutes) or immediately
+with `gpupdate /force`. Check on a client:
+
+```powershell
+Get-ItemProperty 'HKLM:\Software\Policies\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\Domains\telmaco.gr\telerp'
+(Get-ItemProperty HKLM:\Software\Policies\Google\Chrome).AuthServerAllowlist
+(Get-ItemProperty HKLM:\Software\Policies\Microsoft\Edge).AuthServerAllowlist
+```
+
+### B. IIS on TelApp1 (elevated)
+
+The header module DLL is the same assembly FastQuote uses; copy it rather than rebuild.
+Editing web.config recycles the telerp pool only.
+
+```powershell
+New-Item -ItemType Directory 'C:\apps\telerp\wwwroot\bin' -Force
+Copy-Item 'C:\apps\fastquote\wwwroot\bin\IisProxyAuth.dll' 'C:\apps\telerp\wwwroot\bin\'
+Set-Location C:\telerp; git pull
+Copy-Item C:\telerp\scripts\iis\telerp.web.config C:\apps\telerp\wwwroot\web.config
+Get-ItemProperty IIS:\AppPools\telerp -Name managedRuntimeVersion, managedPipelineMode   # v4.0 / Integrated
+```
+
+Prove the handshake at IIS before the code is deployed. `--negotiate -u :` makes curl use
+your Windows logon; the app has no `/api/sso` route yet, so a 404 after the challenge is
+the pass mark (a 401 with `WWW-Authenticate: Negotiate` first, then Node's answer):
+
+```powershell
+curl.exe -s -i --negotiate -u : http://telerp.telmaco.gr/api/sso
+```
+
+500.19 means a locked configuration section (Troubleshooting below). A 500 mentioning the
+module means ASP.NET is missing from the pool or the DLL is not in `bin\`.
+
+### C. Server environment
+
+Add these keys to the `env` block of `C:\telerp\ecosystem.config.cjs` on the server. The
+developer PC's copy already has them, but do not overwrite the server file wholesale
+without checking `SOFT1_ERP_USER` and `SOFT1_ERP_PASSWORD` first: the two copies have
+diverged on the SQL login before.
+
+| Variable | Value |
+| --- | --- |
+| `SESSION_SECRET` | Long random string. Different from FastQuote's and from the dev value. |
+| `AUTH_REQUIRE_SESSION` | `'true'`. API calls without a session get 401. (`'false'` reopens the site anonymously.) |
+| `SESSION_COOKIE_SECURE` | `'false'` while the site is HTTP only. |
+| `SESSION_TTL_SECONDS`, `SESSION_RENEW_WINDOW_SECONDS`, `SESSION_ABSOLUTE_TTL_SECONDS` | Optional; defaults 8 h, 4 h, 12 h. |
+
+### D. Deploy and verify
+
+Run `deploy.bat`. Then, from a domain PC:
+
+- `http://telerp.telmaco.gr/api/sso` in the browser shows your `tlm.Users` row as JSON.
+- The site shows your Username at the foot of the nav.
+- A colleague without a `tlm.Users` row sees "Access denied" with their identity.
+- `curl.exe -s -i http://telerp.telmaco.gr/api/rmt/tasks -X POST` (no cookie) answers 401.
+
+### Rollback
+
+Set `AUTH_REQUIRE_SESSION: 'false'` in `ecosystem.config.cjs` and run `restart.bat`. The
+API gate opens and the app renders for everyone with "Not signed in" in the nav. The IIS
+pieces can stay in place.
+
+### Differences from FastQuote, for the record
+
+- Pages are not rejected by the proxy; only API calls are. A deep link renders the shell
+  and the client provider signs the user in (or shows Access denied). FastQuote answers a
+  bare 401 page on deep links.
+- Rate limiting, request ids and the audit-user cookie were not ported.
+- Development: `DEV_AUTO_WINDOWS_USER` in `.env.local` stands in for IIS and is resolved
+  through `tlm.Users` on the dev snapshot, so the table must exist there (run the script).
 
 TLS is a separate later step for both apps: a 443 binding with a certificate for
 `*.telmaco.gr`, then `SESSION_COOKIE_SECURE=true`.

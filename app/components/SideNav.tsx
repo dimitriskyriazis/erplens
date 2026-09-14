@@ -4,14 +4,14 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { HomeIcon, MaintenanceIcon, ProjectsIcon, RmtIcon } from './NavIcons';
+import { HomeIcon, RmtIcon } from './NavIcons';
+import UserBadge from './UserBadge';
 
 type SubItem = { label: string; href: string };
 type NavItem = { label: string; href: string; icon: ReactNode; subItems?: SubItem[] };
 
 const navItems: NavItem[] = [
   { label: 'Home', href: '/', icon: <HomeIcon /> },
-  { label: 'Projects', href: '/projects', icon: <ProjectsIcon /> },
   {
     label: 'RMT',
     href: '/rmt/tasks',
@@ -21,7 +21,6 @@ const navItems: NavItem[] = [
       { label: 'Plan', href: '/rmt/plan' },
     ],
   },
-  { label: 'Maintenance', href: '/maintenance', icon: <MaintenanceIcon /> },
 ];
 
 export const SIDENAV_COLLAPSED_COOKIE_NAME = 'telerp_sidenav_collapsed';
@@ -101,6 +100,7 @@ export default function SideNav({ initialCollapsed = false }: SideNavProps) {
         })}
       </nav>
       <div className="side-nav__divider" aria-hidden="true" />
+      <UserBadge collapsed={collapsed} />
       <div className="side-nav__footer">
         <span className="side-nav__label">TelERP · read-only on Soft1</span>
       </div>
