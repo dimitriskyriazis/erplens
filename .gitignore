@@ -60,14 +60,8 @@ docs/
 # bat files
 *.bat
 
-# sql migration files
-sql/
-
-# script for telquote import
-telquote-import/
-
 #sql query files
-sql/
+scripts/sql/
 
 # security files
 .security*
@@ -89,14 +83,9 @@ sql/
 # production process definition (holds secrets, lives only on TelApp1)
 ecosystem.config.cjs
 
-# hand-over SQL scripts and the IIS maintenance page are source, not scratch
-!scripts/sql/
-!scripts/iis/maintenance.html
-!scripts/iis/deploy.bat
-!scripts/iis/restart.bat
-
 # local dev server log
 *.log
 
-# PM2 config and its example live only on TelApp1
-ecosystem.config.cjs*
+# Agent files
+AGENTS.md
+CLAUDE.md
