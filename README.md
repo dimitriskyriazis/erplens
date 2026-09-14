@@ -30,13 +30,19 @@ npm test                     # lint + typecheck
 ```
 app/                    routes (App Router)
   api/rmt/tasks         SSRM endpoint for the RMT tasks grid
+  api/rmt/timeline      one project's tasks, planned/estimate actions and logged actions
+  api/rmt/projects      projects with RMT tasks, for the project picker
   api/meta              connection facts, companies, task counts
-  rmt/tasks             first screen: RMT tasks grid
+  rmt/tasks             RMT tasks grid (server-side row model)
+  rmt/plan              RMT plan: tree of tasks and people with a drawn timeline column
+  rmt/components/       ProjectPicker, useProjectTimeline (shared by RMT screens)
   components/           ServerSideGrid, SideNav, PageHeader
 lib/
   sql.ts                ERP pool + read-only guard
   grid/                 AG Grid request -> parameterised T-SQL
   rmt/tasksRelation.ts  task relation + column whitelist
+  rmt/timelineQueries.ts  actions and logged work per project
+  rmt/planModel.ts      rows and bars for the plan grid (pure)
 scripts/sql/            hand-over scripts (review, then run manually)
 ```
 

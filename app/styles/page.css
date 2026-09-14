@@ -230,3 +230,268 @@
   color: #64748b;
   font-size: 13px;
 }
+
+/* RMT timeline toolbar and legends */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.timeline-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 4px 4px 0;
+}
+
+.timeline-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.timeline-btn {
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.timeline-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.timeline-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.timeline-hint {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.lane-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.swatch {
+  display: inline-block;
+  width: 16px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+.swatch--dashed {
+  border: 1px dashed;
+}
+
+.swatch--outline {
+  background: rgba(37, 99, 235, 0.35);
+  border: 1.5px solid #2563eb;
+}
+
+.swatch--solid {
+  background: #2563eb;
+}
+
+.tech-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.chip .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* Timeline: view toggles and clickable people chips */
+.timeline-btn.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.timeline-sep {
+  width: 1px;
+  height: 18px;
+  background: #d1d5db;
+  margin: 0 4px;
+}
+
+.tech-chips .chip {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 2px 8px 2px 6px;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: #334155;
+  cursor: pointer;
+}
+
+.tech-chips .chip:hover {
+  background: #f1f5f9;
+}
+
+.tech-chips .chip.is-selected {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+  font-weight: 600;
+}
+
+.tech-chips .chip.is-dimmed {
+  opacity: 0.45;
+}
+
+/* RMT plan grid: tree of tasks and people with a drawn timeline column */
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+
+.plan-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.plan-frame {
+  flex: 1;
+  min-height: 420px;
+}
+
+.plan-row--task {
+  background: #f1f5f9;
+  font-weight: 600;
+}
+
+.tl-cell {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tl-bar {
+  position: absolute;
+  top: 7px;
+  height: 18px;
+  border-radius: 3px;
+  box-sizing: border-box;
+  --c: #64748b;
+}
+
+.tl-bar--task {
+  background: #94a3b8;
+  border: 1px solid #64748b;
+}
+
+.tl-bar--estimate {
+  background: rgba(165, 180, 252, 0.45);
+  border: 1.5px dashed #6366f1;
+}
+
+.tl-bar--planned {
+  background: color-mix(in srgb, var(--c) 28%, #ffffff);
+  border: 1.5px solid var(--c);
+}
+
+.tl-bar--done {
+  background: var(--c);
+  border: 1px solid var(--c);
+}
+
+/* Collapsed task row: the span on top, the people's bars as a thinner strip below it. */
+.tl-bar--summary {
+  top: 4px;
+  height: 11px;
+}
+
+.tl-bar--child {
+  top: 17px;
+  height: 11px;
+  border-radius: 2px;
+}
+
+.tl-today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1.5px dashed #dc2626;
+  pointer-events: none;
+}
+
+.tl-head {
+  position: relative;
+  height: 100%;
+  font-size: 11px;
+  color: #334155;
+  overflow: hidden;
+}
+
+.tl-head-top {
+  position: absolute;
+  top: 3px;
+  height: 20px;
+  line-height: 20px;
+  border-left: 1px solid #cbd5e1;
+  padding-left: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  font-weight: 600;
+}
+
+.tl-head-bottom {
+  position: absolute;
+  top: 25px;
+  height: 22px;
+  line-height: 22px;
+  border-left: 1px solid #e2e8f0;
+  padding-left: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  color: #64748b;
+}
+
+.tl-head-bottom.is-weekend {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.tl-head-today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1.5px dashed #dc2626;
+}

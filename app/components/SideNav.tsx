@@ -18,7 +18,7 @@ const navItems: NavItem[] = [
     icon: <RmtIcon />,
     subItems: [
       { label: 'Tasks', href: '/rmt/tasks' },
-      { label: 'Timeline', href: '/rmt/timeline' },
+      { label: 'Plan', href: '/rmt/plan' },
     ],
   },
   { label: 'Maintenance', href: '/maintenance', icon: <MaintenanceIcon /> },

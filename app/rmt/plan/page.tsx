@@ -1,4 +1,4 @@
-import RmtTimelineClient from './RmtTimelineClient';
+import RmtPlanClient from './RmtPlanClient';
 import { getMeta } from '@/lib/meta';
 
 // Reads the live ERP on every request; never prerender at build time.
@@ -20,5 +20,5 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   const defaultCompany = Number(process.env.TELERP_DEFAULT_COMPANY ?? 1);
   const company = Number(first(sp.company)) || defaultCompany;
   const prjc = Number(first(sp.prjc)) || null;
-  return <RmtTimelineClient companies={companies} initialCompany={company} initialPrjc={prjc} />;
+  return <RmtPlanClient companies={companies} initialCompany={company} initialPrjc={prjc} />;
 }
