@@ -93,3 +93,6 @@ ecosystem.config.cjs
 !scripts/sql/
 !scripts/iis/maintenance.html
 !scripts/iis/deploy.bat
+
+# local dev server log
+*.log
