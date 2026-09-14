@@ -41,7 +41,6 @@ export type PlanRow = {
   end: number | null;
   phase: string | null;
   status: string | null;
-  percent: number | null;
   plannedDays: number | null;
   doneHours: number | null;
   estimateDays: number | null;
@@ -146,8 +145,8 @@ function taskLabels(tasks: ProjectTimeline['tasks']): Map<number, string> {
   tasks.forEach((t) => seen.set(t.name, (seen.get(t.name) ?? 0) + 1));
   const labels = new Map<number, string>();
   tasks.forEach((t) => {
-    const base = t.name || `Task line ${t.lineNum}`;
-    labels.set(t.taskLineId, (seen.get(t.name) ?? 0) > 1 ? `${base} (#${t.lineNum})` : base);
+    const base = t.name || `Task line ${t.taskLineId}`;
+    labels.set(t.taskLineId, (seen.get(t.name) ?? 0) > 1 ? `${base} (#${t.taskLineId})` : base);
   });
   return labels;
 }
@@ -231,7 +230,6 @@ export function buildPlanModel(data: Pick<ProjectTimeline, 'tasks' | 'actions' |
       end: tEnd,
       phase: t?.phase ?? null,
       status: t?.status ?? null,
-      percent: t?.percentComplete ?? null,
       plannedDays: null,
       doneHours: null,
       estimateDays: null,
@@ -268,7 +266,6 @@ export function buildPlanModel(data: Pick<ProjectTimeline, 'tasks' | 'actions' |
         end: Math.max(...items.map((i) => i.end)),
         phase: null,
         status: null,
-        percent: null,
         plannedDays: plannedDays && plannedDays > 0 ? plannedDays : null,
         doneHours: doneHours && doneHours > 0 ? Math.round(doneHours * 10) / 10 : null,
         estimateDays: estimateDays && estimateDays > 0 ? estimateDays : null,

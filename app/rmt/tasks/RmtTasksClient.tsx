@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import type { ColDef, GetContextMenuItemsParams, ValueFormatterParams } from 'ag-grid-community';
 import PageHeader from '@/app/components/PageHeader';
 import { MENU_ICON, type GridMenuItem, type GridRow } from '@/app/components/ServerSideGrid';
-import { DATA_QUALITY_LABELS } from '@/lib/rmt/tasksRelation';
 
 const PLAN_ICON = MENU_ICON('<path d="M3 4h14v12H3z" /><path d="M6 8h5M6 11h8M6 14h3" />');
 
@@ -27,11 +26,6 @@ const formatDateTime = (p: ValueFormatterParams<GridRow>) => {
   const [y, m, d] = date.split('-');
   return `${d}/${m}/${y}${time ? ` ${time}` : ''}`;
 };
-
-const formatPercent = (p: ValueFormatterParams<GridRow>) =>
-  p.value === null || p.value === undefined ? '' : `${Math.round(Number(p.value))}%`;
-
-const formatQuality = (p: { value: unknown }) => DATA_QUALITY_LABELS[Number(p.value)] ?? String(p.value ?? '');
 
 export default function RmtTasksClient({ companies, defaultCompany }: Props) {
   const [company, setCompany] = useState(defaultCompany);
@@ -55,27 +49,9 @@ export default function RmtTasksClient({ companies, defaultCompany }: Props) {
       { field: 'DurationDays', headerName: 'Days', width: 90, type: 'numericColumn', filter: 'agNumberColumnFilter' },
       { field: 'TaskPhaseName', headerName: 'Phase', width: 180, filter: 'agTextColumnFilter' },
       { field: 'TaskStatusName', headerName: 'Status', width: 120, filter: 'agTextColumnFilter' },
-      {
-        field: 'PercentComplete',
-        headerName: '% done',
-        width: 100,
-        type: 'numericColumn',
-        filter: 'agNumberColumnFilter',
-        valueFormatter: formatPercent,
-      },
-      {
-        field: 'DataQualityFlag',
-        headerName: 'Data quality',
-        width: 170,
-        filter: 'agSetColumnFilter',
-        filterParams: { values: Object.keys(DATA_QUALITY_LABELS).map(Number), valueFormatter: formatQuality },
-        valueFormatter: formatQuality,
-        cellClassRules: { 'cell-warn': (p) => Number(p.value) !== 0 },
-      },
       { field: 'PRJC', headerName: 'PRJC', width: 100, type: 'numericColumn', filter: 'agNumberColumnFilter', hide: true },
       { field: 'TaskID', headerName: 'Task ID', width: 110, type: 'numericColumn', filter: 'agNumberColumnFilter', hide: true },
       { field: 'TaskLineID', headerName: 'Line ID', width: 100, type: 'numericColumn', filter: 'agNumberColumnFilter', hide: true },
-      { field: 'LineNum', headerName: 'Line #', width: 90, type: 'numericColumn', filter: 'agNumberColumnFilter', hide: true },
       { field: 'TaskPhaseCode', headerName: 'Phase code', width: 110, filter: 'agTextColumnFilter', hide: true },
       { field: 'TaskStatusCode', headerName: 'Status code', width: 110, filter: 'agTextColumnFilter', hide: true },
     ],

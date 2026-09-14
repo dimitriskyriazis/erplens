@@ -1,42 +1,30 @@
 /**
- * RMT task grain: one row per dbo.PRJLINES line with SOPLTYPE = 11.
+ * RMT task grain: one row per task in dbo.eqrRMTTasks, the legacy RMT view the Soft1
+ * reports already read (dbo.PRJLINES lines with SOPLTYPE = 11, INNER JOINed to the phase
+ * and status lookups, COMPANY 1 and 2 hardcoded inside the view).
  *
- * TEMPORARY INLINE. This SELECT is byte-for-byte the body of tlm.vwRMTTasks in
- * scripts/sql/2026-09-09-tlm-vwRMTTasks.sql. It lives here only until that view has
- * been created on TELDB2 by a person (TelERP never runs DDL). Once it exists, set
- * RMT_TASKS_RELATION to 'tlm.vwRMTTasks AS v' and delete RMT_TASKS_SELECT_BODY. Until
- * then, keep both copies identical.
+ * Decision 2026-09-14: TelERP reads the existing dbo.eqrRMT* views instead of new tlm
+ * views, so every consumer sees the same task population. The view exposes no COMPANY,
+ * project code or name, so dbo.PRJC is joined here (PRJC is globally unique). Everything
+ * else comes from the view as is; DurationDays is the only derived column.
  */
-export const RMT_TASKS_SELECT_BODY = `
-SELECT  pl.COMPANY,
-        pl.PRJC,
+export const RMT_TASKS_RELATION = `(
+SELECT  p.COMPANY,
+        t.PRJC,
         p.CODE                          AS ProjectCode,
         p.NAME                          AS ProjectName,
-        pl.PRJLINES                     AS TaskLineID,
-        pl.CCCID                        AS TaskID,
-        pl.LINENUM                      AS LineNum,
-        pl.NAME                         AS TaskName,
-        pl.fromdate                     AS TaskStart,
-        pl.finaldate                    AS TaskEnd,
-        DATEDIFF(day, pl.fromdate, pl.finaldate) + 1 AS DurationDays,
-        st.CODE                         AS TaskPhaseCode,
-        st.NAME                         AS TaskPhaseName,
-        st.CCCCLCOLOR                   AS TaskPhaseColor,
-        ls.CODE                         AS TaskStatusCode,
-        ls.NAME                         AS TaskStatusName,
-        pl.TASKCOMPLETE                 AS PercentComplete,
-        CASE WHEN pl.fromdate IS NULL OR pl.finaldate IS NULL THEN 1
-             WHEN pl.finaldate < pl.fromdate                  THEN 2
-             WHEN st.CCCCLRMTSTATUSTYPE IS NULL               THEN 3
-             WHEN ls.CCCCLRMTLINESSTATUS IS NULL              THEN 4
-             ELSE 0 END                 AS DataQualityFlag
-FROM    dbo.PRJLINES pl
-LEFT JOIN dbo.PRJC                p  ON p.PRJC = pl.PRJC AND p.COMPANY = pl.COMPANY
-LEFT JOIN dbo.CCCCLRMTSTATUSTYPE  st ON st.CCCCLRMTSTATUSTYPE  = pl.CCCCLRMTSTATUSTYPE  AND st.COMPANY = pl.COMPANY
-LEFT JOIN dbo.CCCCLRMTLINESSTATUS ls ON ls.CCCCLRMTLINESSTATUS = pl.CCCCLRMTLINESSTATUS AND ls.COMPANY = pl.COMPANY
-WHERE   pl.SOPLTYPE = 11`;
-
-export const RMT_TASKS_RELATION = `(${RMT_TASKS_SELECT_BODY}
+        t.PRJLINES                      AS TaskLineID,
+        t.TaskID,
+        t.TaskName,
+        t.TaskStart,
+        t.TaskEnd,
+        DATEDIFF(day, t.TaskStart, t.TaskEnd) + 1 AS DurationDays,
+        t.TaskPhaseCode,
+        t.TaskPhaseName,
+        t.TaskStatusCode,
+        t.TaskStatusName
+FROM    dbo.eqrRMTTasks t
+JOIN    dbo.PRJC p ON p.PRJC = t.PRJC
 ) AS v`;
 
 /** Whitelist: grid colId -> expression. Anything not listed cannot be filtered or sorted. */
@@ -47,7 +35,6 @@ export const RMT_TASKS_COLUMNS: Record<string, string> = {
   ProjectName: 'v.ProjectName',
   TaskLineID: 'v.TaskLineID',
   TaskID: 'v.TaskID',
-  LineNum: 'v.LineNum',
   TaskName: 'v.TaskName',
   TaskStart: 'v.TaskStart',
   TaskEnd: 'v.TaskEnd',
@@ -56,20 +43,10 @@ export const RMT_TASKS_COLUMNS: Record<string, string> = {
   TaskPhaseName: 'v.TaskPhaseName',
   TaskStatusCode: 'v.TaskStatusCode',
   TaskStatusName: 'v.TaskStatusName',
-  PercentComplete: 'v.PercentComplete',
-  DataQualityFlag: 'v.DataQualityFlag',
 };
 
 export const RMT_TASKS_QUICK_FILTER = ['ProjectCode', 'ProjectName', 'TaskName', 'TaskPhaseName', 'TaskStatusName'].map(
   (colId) => ({ colId, expression: RMT_TASKS_COLUMNS[colId] }),
 );
 
-export const RMT_TASKS_DEFAULT_ORDER = 'v.TaskStart DESC, v.PRJC, v.LineNum';
-
-export const DATA_QUALITY_LABELS: Record<number, string> = {
-  0: 'OK',
-  1: 'Missing start or end',
-  2: 'End before start',
-  3: 'No phase',
-  4: 'No status',
-};
+export const RMT_TASKS_DEFAULT_ORDER = 'v.TaskStart DESC, v.PRJC, v.TaskLineID';
