@@ -96,3 +96,6 @@ ecosystem.config.cjs
 
 # local dev server log
 *.log
+
+# PM2 config and its example live only on TelApp1
+ecosystem.config.cjs*
