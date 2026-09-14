@@ -6,10 +6,13 @@ import {
   ModuleRegistry,
   themeQuartz,
   type ColDef,
+  type DefaultMenuItem,
+  type GetContextMenuItemsParams,
   type GridApi,
   type GridReadyEvent,
   type IServerSideDatasource,
   type IServerSideGetRowsParams,
+  type MenuItemDef,
 } from 'ag-grid-community';
 import { AllEnterpriseModule, LicenseManager } from 'ag-grid-enterprise';
 
@@ -37,6 +40,46 @@ const gridTheme = themeQuartz.withParams({
 
 type GridResponse = { ok?: boolean; rows?: GridRow[]; rowCount?: number; error?: string };
 
+export type GridMenuItem = MenuItemDef<GridRow> | DefaultMenuItem;
+
+/** Filter models the server understands (see lib/grid/filterProcessing.ts). */
+type ColumnFilterModel =
+  | { filterType: 'text'; type: 'contains'; filter: string }
+  | { filterType: 'number'; type: 'equals'; filter: number }
+  | { filterType: 'date'; type: 'equals'; dateFrom: string }
+  | { filterType: 'set'; values: string[] };
+
+export const MENU_ICON = (path: string) =>
+  `<span class="telerp-menu-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
+
+const FILTER_ICON = MENU_ICON('<path d="M3 4h14l-5.5 5.5v5l-3-1.5v-3.5L3 4z" />');
+
+/**
+ * "Filter By" the clicked cell, as in FastQuote: the model matches the column's filter
+ * type so the floating filter shows it and the server-side translation applies it.
+ * Text columns use contains; dates match the day, ignoring the time.
+ */
+function filterModelForValue(colDef: ColDef<GridRow> | undefined, value: unknown): ColumnFilterModel | null {
+  if (!colDef || colDef.filter === false || value === null || value === undefined) return null;
+  const kind = typeof colDef.filter === 'string' ? colDef.filter : 'agTextColumnFilter';
+  const text = String(value).trim();
+  if (!text) return null;
+  switch (kind) {
+    case 'agSetColumnFilter':
+      return { filterType: 'set', values: [text] };
+    case 'agNumberColumnFilter': {
+      const n = Number(text);
+      return Number.isFinite(n) ? { filterType: 'number', type: 'equals', filter: n } : null;
+    }
+    case 'agDateColumnFilter': {
+      const m = /^(\d{4}-\d{2}-\d{2})/.exec(text);
+      return m ? { filterType: 'date', type: 'equals', dateFrom: `${m[1]} 00:00:00` } : null;
+    }
+    default:
+      return { filterType: 'text', type: 'contains', filter: text };
+  }
+}
+
 type Props = {
   /** POST endpoint speaking the {request:{startRow,endRow,filterModel,sortModel,quickFilterText,...}} contract. */
   endpoint: string;
@@ -49,6 +92,11 @@ type Props = {
   onGridReady?: (api: GridApi<GridRow>) => void;
   onRowCount?: (count: number) => void;
   onError?: (message: string) => void;
+  /**
+   * Page-specific items for the right-click menu on a row. They go first, then
+   * "Filter By" on the clicked cell, then the grid's defaults (copy, export).
+   */
+  contextMenuItems?: (params: GetContextMenuItemsParams<GridRow>) => GridMenuItem[];
 };
 
 /**
@@ -66,6 +114,7 @@ export default function ServerSideGrid({
   onGridReady,
   onRowCount,
   onError,
+  contextMenuItems,
 }: Props) {
   const apiRef = useRef<GridApi<GridRow> | null>(null);
   // Latest props for the datasource, which AG Grid holds on to across renders.
@@ -75,12 +124,40 @@ export default function ServerSideGrid({
   const extrasRef = useRef(requestExtras);
   const onRowCountRef = useRef(onRowCount);
   const onErrorRef = useRef(onError);
+  const menuRef = useRef(contextMenuItems);
   useEffect(() => {
     quickRef.current = quickFilterText;
     extrasRef.current = requestExtras;
     onRowCountRef.current = onRowCount;
     onErrorRef.current = onError;
+    menuRef.current = contextMenuItems;
   });
+
+  const getContextMenuItems = useCallback((params: GetContextMenuItemsParams<GridRow>): GridMenuItem[] => {
+    // Read-only grid: cut and paste have nothing to do here.
+    const defaults = (params.defaultItems ?? []).filter((item) => item !== 'cut' && item !== 'paste');
+    const items: GridMenuItem[] = [];
+    const custom = params.node ? (menuRef.current?.(params) ?? []) : [];
+    if (custom.length) items.push(...custom, 'separator');
+    const column = params.column;
+    const model = params.node && column ? filterModelForValue(column.getColDef(), params.value) : null;
+    if (model && column) {
+      const colId = column.getColId();
+      items.push(
+        {
+          name: 'Filter By',
+          icon: FILTER_ICON,
+          action: () => {
+            const next: Record<string, unknown> = { ...(params.api.getFilterModel() ?? {}) };
+            next[colId] = model;
+            params.api.setFilterModel(next);
+          },
+        },
+        'separator',
+      );
+    }
+    return [...items, ...defaults];
+  }, []);
 
   const datasource = useMemo<IServerSideDatasource<GridRow>>(
     () => ({
@@ -180,6 +257,7 @@ export default function ServerSideGrid({
           statusPanels: [{ statusPanel: 'agSelectedRowCountComponent' }, { statusPanel: 'agAggregationComponent' }],
         }}
         cellSelection
+        getContextMenuItems={getContextMenuItems}
         onGridReady={handleReady}
       />
     </div>

@@ -16,6 +16,7 @@ import {
 import { AllEnterpriseModule, LicenseManager } from 'ag-grid-enterprise';
 import TimelineCell from './TimelineCell';
 import TimelineHeader from './TimelineHeader';
+import { hideBarTip } from './barTip';
 import { DAY_MS, buildPlanModel, fmtDate, shortName, type PlanRow, type Range, type TimeScale } from '@/lib/rmt/planModel';
 import type { ProjectTimeline } from '@/lib/rmt/timelineQueries';
 
@@ -343,6 +344,7 @@ export default function PlanGrid({ data, now }: Props) {
           sideBar={{ toolPanels: ['columns'] }}
           onGridReady={onGridReady}
           onRowGroupOpened={onRowGroupOpened}
+          onBodyScroll={hideBarTip}
         />
       </div>
     </div>

@@ -2,6 +2,7 @@
 
 import type { CustomCellRendererProps } from 'ag-grid-react';
 import { DAY_MS, fmtDateTime, shortName, type PlanBar, type PlanRow, type TimeScale } from '@/lib/rmt/planModel';
+import { hideBarTip, showBarTip, type BarTip } from './barTip';
 
 type Ctx = { scale: TimeScale };
 
@@ -12,15 +13,16 @@ const KIND_LABEL: Record<PlanBar['kind'], string> = {
   done: 'Done',
 };
 
-const tooltip = (b: PlanBar) =>
-  [
-    `${KIND_LABEL[b.kind]}${b.who ? `: ${shortName(b.who)}` : ''}`,
-    `${fmtDateTime(b.start)} to ${fmtDateTime(b.end)}`,
-    b.hours !== null ? `${b.hours} h` : '',
-    b.detail,
-  ]
-    .filter(Boolean)
-    .join('\n');
+const tipFor = (row: PlanRow, b: PlanBar): BarTip => ({
+  heading: `${KIND_LABEL[b.kind]}${b.who ? `: ${shortName(b.who)}` : ''}`,
+  rows: [
+    ['Task', b.kind === 'task' ? '' : row.task],
+    ['From', fmtDateTime(b.start)],
+    ['To', fmtDateTime(b.end)],
+    ['Hours', b.hours !== null ? String(b.hours) : ''],
+    [b.kind === 'task' ? 'Phase · status' : 'Notes', b.detail],
+  ],
+});
 
 /**
  * Draws one row's bars against the shared time scale. A collapsed task row also shows
@@ -42,7 +44,15 @@ export default function TimelineCell(props: CustomCellRendererProps<PlanRow, unk
     const width = Math.max(2, x(b.end) - left);
     const style: React.CSSProperties & { '--c'?: string } = { left, width };
     if (b.colour) style['--c'] = b.colour;
-    return <div key={`${extra}${i}`} className={`tl-bar tl-bar--${b.kind}${extra}`} style={style} title={tooltip(b)} />;
+    return (
+      <div
+        key={`${extra}${i}`}
+        className={`tl-bar tl-bar--${b.kind}${extra}`}
+        style={style}
+        onMouseEnter={(e) => showBarTip(e.currentTarget, tipFor(row, b))}
+        onMouseLeave={hideBarTip}
+      />
+    );
   };
 
   const todayX = x(scale.now);

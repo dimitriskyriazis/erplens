@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import type { ColDef, ValueFormatterParams } from 'ag-grid-community';
+import { useRouter } from 'next/navigation';
+import type { ColDef, GetContextMenuItemsParams, ValueFormatterParams } from 'ag-grid-community';
 import PageHeader from '@/app/components/PageHeader';
-import type { GridRow } from '@/app/components/ServerSideGrid';
+import { MENU_ICON, type GridMenuItem, type GridRow } from '@/app/components/ServerSideGrid';
 import { DATA_QUALITY_LABELS } from '@/lib/rmt/tasksRelation';
+
+const PLAN_ICON = MENU_ICON('<path d="M3 4h14v12H3z" /><path d="M6 8h5M6 11h8M6 14h3" />');
 
 // AG Grid touches window at import time, so it only loads in the browser.
 const ServerSideGrid = dynamic(() => import('@/app/components/ServerSideGrid'), {
@@ -81,6 +84,26 @@ export default function RmtTasksClient({ companies, defaultCompany }: Props) {
 
   const requestExtras = useMemo(() => ({ company }), [company]);
 
+  // Right-click on a task: jump to its project's plan.
+  const router = useRouter();
+  const contextMenuItems = useCallback(
+    (params: GetContextMenuItemsParams<GridRow>): GridMenuItem[] => {
+      const row = params.node?.data;
+      const prjc = Number(row?.PRJC);
+      if (!Number.isFinite(prjc) || prjc <= 0) return [];
+      const rowCompany = Number(row?.COMPANY) || company;
+      const code = typeof row?.ProjectCode === 'string' && row.ProjectCode ? ` (${row.ProjectCode})` : '';
+      return [
+        {
+          name: `View project's plan${code}`,
+          icon: PLAN_ICON,
+          action: () => router.push(`/rmt/plan?company=${rowCompany}&prjc=${prjc}`),
+        },
+      ];
+    },
+    [router, company],
+  );
+
   return (
     <main className="page">
       <PageHeader
@@ -118,6 +141,7 @@ export default function RmtTasksClient({ companies, defaultCompany }: Props) {
           rowIdField="TaskID"
           quickFilterText={debouncedSearch}
           requestExtras={requestExtras}
+          contextMenuItems={contextMenuItems}
           onRowCount={(n) => {
             setRowCount(n);
             setError(null);
