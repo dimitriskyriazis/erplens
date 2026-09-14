@@ -130,7 +130,7 @@ if (-not (Test-Path (Join-Path $SiteRoot 'maintenance.html'))) {
   Write-Host "WARNING: maintenance.html not found in $SiteRoot - the maintenance page will 404 while the gate is on." -ForegroundColor Yellow
 }
 if (-not (Test-Path $Ecosystem)) {
-  Write-Host "ecosystem.config.cjs not found at $Ecosystem - copy ecosystem.config.cjs.example and fill in the secrets." -ForegroundColor Red
+  Write-Host "ecosystem.config.cjs not found at $Ecosystem - copy it from the developer PC (it is never in git)." -ForegroundColor Red
   exit 1
 }
 $pm2Problem = Get-Pm2Problem

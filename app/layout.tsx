@@ -8,6 +8,7 @@ import SideNav, { SIDENAV_COLLAPSED_COOKIE_NAME } from './components/SideNav';
 export const metadata: Metadata = {
   title: 'TelERP',
   description: 'Operational views and stats over Soft1 for Projects, RMT and Maintenance',
+  icons: { icon: '/favicon.ico' },
 };
 
 export default async function RootLayout({ children }: LayoutProps<'/'>) {

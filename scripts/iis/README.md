@@ -38,7 +38,9 @@ Node directly: both ports are bound to loopback.
 | `maintenance.html` | `C:\apps\telerp\wwwroot\maintenance.html` | Shown while `maintenance.flag` exists in the site root |
 | `deploy.ps1` | Stays in the checkout | Pull, build, restart under the maintenance gate, roll back on failure |
 | `deploy.bat` | Stays in the checkout | Elevates and runs `deploy.ps1` |
-| `../../ecosystem.config.cjs.example` | `C:\telerp\ecosystem.config.cjs` | PM2 process definition with the production environment (gitignored once copied) |
+| `restart.ps1` | Stays in the checkout | Quick restart: re-reads `ecosystem.config.cjs`, no pull, no build |
+| `restart.bat` | Stays in the checkout | Elevates and runs `restart.ps1` |
+| `ecosystem.config.cjs` (never in git; master copy on the developer PC) | `C:\telerp\ecosystem.config.cjs` | PM2 process definition with the production environment |
 | `../sql/2026-09-09-svc_telerp-login.sql` | Run by a DBA on TELDB2 | Creates the read-only SQL login |
 
 ## Already on TelApp1 because FastQuote runs there
@@ -87,7 +89,7 @@ Facts verified 2026-09-09 from a domain PC:
 - `telmaco.gr` is an Active Directory integrated zone (DomainDnsZones partition). Primary
   server `teldc1.telmaco.gr` (192.168.100.18); it replicates to `teldc2` and `achilles`.
 - `fastquote.telmaco.gr` is a plain A record, TTL 1 hour, pointing at 192.168.100.84.
-  `telerp.telmaco.gr` must be created the same way.
+  `telerp.telmaco.gr` was created the same way on 2026-09-14 and resolves LAN-wide.
 - Writing to the zone needs membership of **Domain Admins** or **DnsAdmins**. Ordinary user
   accounts (including `dim.kyriazis`) cannot do it. TelDC1 accepts remote PowerShell
   (WinRM) and RDP, so nothing has to be installed on the PC that runs the command.
@@ -152,10 +154,12 @@ npm ci
 
 ### 6. Production configuration (two gitignored files)
 
-```powershell
-Copy-Item C:\telerp\ecosystem.config.cjs.example C:\telerp\ecosystem.config.cjs
-notepad C:\telerp\ecosystem.config.cjs      # set SOFT1_ERP_PASSWORD to the svc_telerp password
-```
+`ecosystem.config.cjs` is deliberately absent from GitHub: `.gitignore` matches
+`ecosystem.config.cjs*`, so a fresh clone has neither it nor an example. The master copy
+lives in the telerp folder on the developer PC. Copy it to `C:\telerp\ecosystem.config.cjs`
+on the server by hand (RDP clipboard or a file share), then check it defines one app named
+`telerp` started with `-H 127.0.0.1 -p 3001` and that `SOFT1_ERP_PASSWORD` is the
+`svc_telerp` password from step 2.
 
 Then create `C:\telerp\.env.production.local` with one line:
 
@@ -241,8 +245,10 @@ Select-String -Path C:\ProgramData\pm2\home\dump.pm2 -Pattern telerp -SimpleMatc
 ```
 
 All node processes in session 0, the owner of 3001 among them, and at least one hit in the
-dump. Then restart the service (it takes about a minute to stop) and confirm both apps
-come back on their own with no `pm2` command:
+dump. Then restart the service and confirm both apps come back on their own with no `pm2`
+command. **This restarts FastQuote too** (both apps live in the one service daemon), so it
+is a one-minute FastQuote outage: do it out of office hours or skip it. The sign-out test
+below is safe at any time and proves the same thing for TELERP.
 
 ```powershell
 Restart-Service pm2.exe
@@ -252,6 +258,15 @@ Invoke-WebRequest http://127.0.0.1:3000/api/health -UseBasicParsing | Select-Obj
 
 Finally sign out of the RDP session (not just disconnect), sign back in, and hit both
 health URLs again.
+
+### What never touches FastQuote
+
+Every command in steps 5 to 8 and 10 is scoped to TELERP: `pm2 start` with the telerp
+ecosystem file only starts the apps in that file, `pm2 save` writes both apps to the dump
+without restarting either, `New-Website` and `Restart-WebAppPool -Name telerp` act on the
+telerp site alone. The commands that WOULD interrupt FastQuote are `Restart-Service pm2.exe`,
+`pm2 kill`, `pm2 restart all`, `pm2 delete fastquote`, `iisreset` and
+`Restart-WebAppPool -Name fastquote`. None of them is needed to bring TELERP up.
 
 ### 10. Routine deploys
 
@@ -272,6 +287,16 @@ outage. The script refuses to start if the PM2 service is stopped or a stray dae
 Because the script pulls itself, a change to `deploy.ps1` takes effect on the deploy after
 the one that pulled it. Users may need a hard refresh (Ctrl+Shift+R) after a deploy to drop
 the cached client bundle.
+
+### 11. Quick restart without a deploy
+
+Double-click `C:\telerp\scripts\iis\restart.bat` after editing `ecosystem.config.cjs`
+(new SQL password, changed setting) or when the app is wedged. It elevates and runs
+`restart.ps1`, which checks the PM2 service, does `pm2 delete telerp` and `pm2 start` with
+the ecosystem file (the only way PM2 re-reads the env block; `pm2 restart` keeps the old
+values), saves the dump, waits for port 3001, confirms the process is in session 0 and
+prints the health probe with its body. Downtime is the few seconds Node takes to boot.
+FastQuote is never touched.
 
 ## Troubleshooting
 
