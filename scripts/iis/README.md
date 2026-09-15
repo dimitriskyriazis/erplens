@@ -35,11 +35,9 @@ Node directly: both ports are bound to loopback.
 | File | Goes to | Purpose |
 | --- | --- | --- |
 | `telerp.web.config` | `C:\apps\telerp\wwwroot\web.config` | Reverse proxy to 3001, maintenance gate, error pass-through, anonymous auth |
-| `maintenance.html` | `C:\apps\telerp\wwwroot\maintenance.html` | Shown while `maintenance.flag` exists in the site root |
+| `maintenance.html` | `C:\apps\telerp\wwwroot\maintenance.html` | Shown while `maintenance.flag` exists in the site root. `deploy.ps1` copies it there on every deploy, so edit only the tracked copy |
 | `deploy.ps1` | Stays in the checkout | Pull, build, restart under the maintenance gate, roll back on failure |
 | `deploy.bat` | Stays in the checkout | Elevates and runs `deploy.ps1` |
-| `restart.ps1` | Stays in the checkout | Quick restart: re-reads `ecosystem.config.cjs`, no pull, no build |
-| `restart.bat` | Stays in the checkout | Elevates and runs `restart.ps1` |
 | `ecosystem.config.cjs` (never in git; master copy on the developer PC) | `C:\telerp\ecosystem.config.cjs` | PM2 process definition with the production environment |
 | `../sql/2026-09-09-svc_telerp-login.sql` | Run by a DBA on TELDB2 | Creates the read-only SQL login |
 
@@ -273,12 +271,17 @@ telerp site alone. The commands that WOULD interrupt FastQuote are `Restart-Serv
 Push to `main`, then on TelApp1 double-click `C:\telerp\scripts\iis\deploy.bat`. It
 elevates and runs `deploy.ps1`, which:
 
-1. Creates `maintenance.flag` so IIS serves `maintenance.html` to everyone.
-2. Pulls `main`.
+1. Copies `maintenance.html` to the site root if it changed, creates `maintenance.flag`,
+   recycles the `telerp` pool and proves with a real request that IIS now serves the
+   maintenance page. If it cannot prove it within about 16 seconds it warns and carries on
+   (see "Maintenance page never appears" below).
+2. Pulls `main`, syncs `maintenance.html` again and warns when the live `web.config`
+   differs from the tracked one (that copy stays manual).
 3. Stops the `telerp` PM2 app and renames `.next` to `.next.prev`.
 4. Runs `npm ci` only when `package-lock.json` changed, then `npm run build`.
-5. Starts PM2, saves the dump, removes the flag, recycles the `telerp` pool.
-6. Deletes `.next.prev`.
+5. Starts PM2, saves the dump, waits until port 3001 listens, removes the flag, recycles
+   the `telerp` pool.
+6. Deletes `.next.prev` and prints the health probe.
 
 Any failure after step 3 restores `.next.prev`, resets to the previous commit and brings
 the previous build back up, so a bad deploy ends with the old version live rather than an
@@ -288,15 +291,14 @@ Because the script pulls itself, a change to `deploy.ps1` takes effect on the de
 the one that pulled it. Users may need a hard refresh (Ctrl+Shift+R) after a deploy to drop
 the cached client bundle.
 
-### 11. Quick restart without a deploy
+### 11. Restart without a code change
 
-Double-click `C:\telerp\scripts\iis\restart.bat` after editing `ecosystem.config.cjs`
-(new SQL password, changed setting) or when the app is wedged. It elevates and runs
-`restart.ps1`, which checks the PM2 service, does `pm2 delete telerp` and `pm2 start` with
-the ecosystem file (the only way PM2 re-reads the env block; `pm2 restart` keeps the old
-values), saves the dump, waits for port 3001, confirms the process is in session 0 and
-prints the health probe with its body. Downtime is the few seconds Node takes to boot.
-FastQuote is never touched.
+Run `deploy.bat` again. It is the restart tool as well: `pm2 delete telerp` followed by
+`pm2 start` with the ecosystem file is the only way PM2 re-reads the env block (`pm2
+restart` keeps the old values), and the deploy does exactly that under the maintenance
+gate. On an unchanged commit it skips `npm ci`, rebuilds in about 20 seconds and prints
+the health probe at the end. Use it after editing `ecosystem.config.cjs` (new SQL
+password, changed setting) or when the app is wedged. FastQuote is never touched.
 
 ## Troubleshooting
 
@@ -311,9 +313,21 @@ authentication sections already; if it recurs:
 `appcmd unlock config -section:system.webServer/security/authentication/anonymousAuthentication`
 and the same for `windowsAuthentication`.
 
-**Stuck on the maintenance page after a deploy.** IIS caches the maintenance response.
-`Restart-WebAppPool -Name telerp` after making sure `C:\apps\telerp\wwwroot\maintenance.flag`
-is gone.
+**Maintenance page never appears (users get a 502 while Node is down).** Seen on both
+TelERP deploys of 2026-09-14 evening: the flag existed the whole time, yet the IIS log
+(`C:\inetpub\logs\LogFiles\W3SVC3`, timestamps in UTC) shows only `502.3` with win32
+status 12029 (ARR could not connect to Node) for `/`, and the browser rendered its own
+"page isn't working" screen because `httpErrors` passes the empty upstream response
+through. IIS kept answering from its caches after the flag file appeared. FastQuote's
+identical rule does serve its page during its minute-long deploys (`W3SVC2`, 2026-09-09),
+so the effect is short-lived, and TelERP's 20-second deploys sat entirely inside it.
+`deploy.ps1` now recycles the pool right after creating the flag and refuses to believe
+the gate until a real request returns the page (it warns and carries on otherwise). By
+hand: `New-Item C:\apps\telerp\wwwroot\maintenance.flag; Restart-WebAppPool -Name telerp`.
+
+**Stuck on the maintenance page after a deploy.** The mirror case: IIS caches the
+maintenance response. `Restart-WebAppPool -Name telerp` after making sure
+`C:\apps\telerp\wwwroot\maintenance.flag` is gone.
 
 **Stray PM2 daemon.** Symptom: the site dies when someone signs out of the server, or
 `pm2` commands from a non-elevated window fail with `connect EPERM //./pipe/rpc.sock`.
@@ -467,7 +481,7 @@ Run `deploy.bat`. Then, from a domain PC:
 
 ### Rollback
 
-Set `AUTH_REQUIRE_SESSION: 'false'` in `ecosystem.config.cjs` and run `restart.bat`. The
+Set `AUTH_REQUIRE_SESSION: 'false'` in `ecosystem.config.cjs` and restart the app (step 11). The
 API gate opens and the app renders for everyone with "Not signed in" in the nav. The IIS
 pieces can stay in place.
 

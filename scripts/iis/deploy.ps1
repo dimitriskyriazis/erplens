@@ -3,10 +3,18 @@
   TELERP production deploy on TelApp1. Adapted from C:\fastquote\scripts\iis\deploy.ps1.
   Run via deploy.bat (which elevates and calls this with -File).
 
-  Flow: maintenance gate ON -> pull -> stop Node -> set the previous build aside
-  -> install + build -> start Node -> gate OFF. While the gate file exists, the IIS
-  "Maintenance Mode" rewrite rule serves maintenance.html for every request, so users
-  never hit the half-deployed / stopped backend.
+  Flow: maintenance gate ON (flag + pool recycle, then PROVE the page is served) -> pull
+  -> stop Node -> set the previous build aside -> install + build -> start Node -> wait
+  until it listens -> gate OFF. While the gate file exists, the IIS "Maintenance Mode"
+  rewrite rule serves maintenance.html for every request, so users never hit the
+  half-deployed / stopped backend.
+
+  GATE GOTCHA (2026-09-14): IIS kept answering from its caches after the flag file appeared,
+  so on TelERP's 20-second deploys the flag alone did nothing and users got 502s the whole
+  time Node was down (IIS log W3SVC3: 502.3, win32 status 12029). The mirror problem was
+  already known: deleting the flag alone leaves the site stuck on the page. Both directions
+  get the same cure, a recycle of the telerp pool right after touching the flag, and the gate
+  is verified with a real request before Node is stopped.
 
   ROLLBACK: next build overwrites .next in place. We rename .next to .next.prev before
   building and restore it (plus the previous commit and its node_modules) if anything
@@ -31,6 +39,11 @@ $Flag      = Join-Path $SiteRoot 'maintenance.flag'
 $Dist      = Join-Path $AppRoot '.next'
 $DistPrev  = Join-Path $AppRoot '.next.prev'
 $Ecosystem = Join-Path $AppRoot 'ecosystem.config.cjs'
+$SiteUrl   = 'http://telerp.telmaco.gr'  # IIS binding (host header); resolves to this server
+$MaintSrc  = Join-Path $AppRoot  'scripts\iis\maintenance.html'   # tracked page
+$MaintLive = Join-Path $SiteRoot 'maintenance.html'               # the page IIS serves
+$WebCfgSrc  = Join-Path $AppRoot  'scripts\iis\telerp.web.config'
+$WebCfgLive = Join-Path $SiteRoot 'web.config'
 
 # Machine-wide PM2 home used by the pm2.exe service. Never let a user-level value win.
 $env:PM2_HOME = 'C:\ProgramData\pm2\home'
@@ -65,11 +78,52 @@ function Test-NodeInSessionZero {
   return ($null -ne $proc -and $proc.SessionId -eq 0)
 }
 
+# Keep the page IIS serves identical to the tracked one. web.config is deliberately NOT synced
+# here: a bad web.config takes the site down, and only a human should push that button.
+function Sync-MaintenancePage {
+  if (-not (Test-Path $MaintSrc)) { return }
+  if ((Test-Path $MaintLive) -and ((Get-FileHash $MaintSrc).Hash -eq (Get-FileHash $MaintLive).Hash)) { return }
+  Copy-Item $MaintSrc $MaintLive -Force
+  Write-Host "Copied maintenance.html to $SiteRoot" -ForegroundColor DarkGray
+}
+
+# True once something listens on $Port. pm2 start returns as soon as the process is spawned;
+# next start needs about a second before it accepts connections.
+function Wait-ForPort($Seconds) {
+  $deadline = (Get-Date).AddSeconds($Seconds)
+  do {
+    if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) { return $true }
+    Start-Sleep -Milliseconds 500
+  } while ((Get-Date) -lt $deadline)
+  return $false
+}
+
+# True when IIS answers a fresh request with the maintenance page. The <title> of the live page
+# is the marker, so a redesign never breaks the check; the random query string defeats any
+# cached answer for "/".
+function Test-GateEngaged {
+  if (-not (Test-Path $MaintLive)) { return $false }
+  $title = [regex]::Match((Get-Content $MaintLive -Raw), '<title>([^<]+)</title>').Groups[1].Value
+  if (-not $title) { return $false }
+  try {
+    $probe = "$SiteUrl/?gate=$([guid]::NewGuid().ToString('N'))"
+    $r = Invoke-WebRequest -Uri $probe -UseBasicParsing -TimeoutSec 10
+    return ($r.StatusCode -eq 200 -and $r.Content.Contains($title))
+  } catch {
+    return $false
+  }
+}
+
 function Bring-SiteUp {
   pm2 delete $Pm2Name 2>$null | Out-Null
   pm2 start $Ecosystem
   if ($LASTEXITCODE -ne 0) { return $false }
   pm2 save | Out-Null
+  # Lift the gate only once Node accepts connections, or the first refreshes land on a 502.
+  if (-not (Wait-ForPort 60)) {
+    Write-Host "Node did not start listening on port $Port within 60 s. Check: pm2 logs $Pm2Name --lines 50" -ForegroundColor Red
+    return $false
+  }
   if (Test-Path $Flag) { Remove-Item $Flag -Force }
   # IIS kernel/output-caches the maintenance.html response, so deleting the flag alone is NOT
   # enough - the site stays stuck on the maintenance page until the app pool is recycled.
@@ -105,8 +159,8 @@ function Fail-WithRollback($msg) {
   Write-Host '  npm ci' -ForegroundColor Yellow
   Write-Host '  npm run build' -ForegroundColor Yellow
   Write-Host "  pm2 start $Ecosystem; pm2 save" -ForegroundColor Yellow
-  Write-Host "  Restart-WebAppPool -Name $AppPool" -ForegroundColor Yellow
   Write-Host "  Remove-Item '$Flag' -Force" -ForegroundColor Yellow
+  Write-Host "  Restart-WebAppPool -Name $AppPool   # after the flag is gone, or IIS stays on the page" -ForegroundColor Yellow
   exit 1
 }
 
@@ -126,8 +180,8 @@ if (-not (Test-Path $SiteRoot)) {
   Write-Host "SiteRoot '$SiteRoot' not found - create the IIS site first (scripts/iis/README.md, step 7)." -ForegroundColor Red
   exit 1
 }
-if (-not (Test-Path (Join-Path $SiteRoot 'maintenance.html'))) {
-  Write-Host "WARNING: maintenance.html not found in $SiteRoot - the maintenance page will 404 while the gate is on." -ForegroundColor Yellow
+if (-not (Test-Path $MaintSrc) -and -not (Test-Path $MaintLive)) {
+  Write-Host "WARNING: maintenance.html is missing from both the checkout and $SiteRoot - the gate will 404 while it is on." -ForegroundColor Yellow
 }
 if (-not (Test-Path $Ecosystem)) {
   Write-Host "ecosystem.config.cjs not found at $Ecosystem - copy it from the developer PC (it is never in git)." -ForegroundColor Red
@@ -157,12 +211,32 @@ if ($LASTEXITCODE -ne 0 -or -not $PreSha) {
 Write-Host "Current build is at $PreSha" -ForegroundColor Cyan
 
 # --- 1) Maintenance ON --------------------------------------------------------
+Sync-MaintenancePage
 New-Item -ItemType File $Flag -Force | Out-Null
-Write-Host "Maintenance mode ON  ($Flag)" -ForegroundColor Cyan
+# IIS does not notice a new flag file by itself (GATE GOTCHA in the header): recycle the pool so
+# the next request re-evaluates the rewrite rule, then prove it with a real request. The old
+# build is still running, so the recycle costs users nothing but the maintenance page.
+Restart-WebAppPool -Name $AppPool
+$GateUp = $false
+foreach ($attempt in 1..8) {
+  if (Test-GateEngaged) { $GateUp = $true; break }
+  Start-Sleep -Seconds 2
+}
+if ($GateUp) {
+  Write-Host "Maintenance mode ON  ($Flag) - verified: $SiteUrl serves maintenance.html" -ForegroundColor Cyan
+} else {
+  Write-Host "Maintenance mode ON  ($Flag)" -ForegroundColor Cyan
+  Write-Host "WARNING: $SiteUrl still does not serve maintenance.html. Users will get a 502 while Node is down." -ForegroundColor Yellow
+  Write-Host '         Continuing anyway. See scripts/iis/README.md, "Maintenance page never appears".' -ForegroundColor Yellow
+}
 
 # --- 2) Pull (still serving the old build; nothing destroyed yet) -------------
 git pull
 if ($LASTEXITCODE -ne 0) { Fail-Early 'git pull failed (dirty working tree or network).' }
+Sync-MaintenancePage   # the pull may have changed the page; IIS serves the new one from here on
+if ((Test-Path $WebCfgSrc) -and (Test-Path $WebCfgLive) -and (Compare-Object (Get-Content $WebCfgSrc) (Get-Content $WebCfgLive))) {
+  Write-Host "NOTE: $WebCfgLive differs from scripts\iis\telerp.web.config. Review the diff and copy it by hand (README, Phase 2 B)." -ForegroundColor Yellow
+}
 
 # --- 3) Stop Node, then set the previous build aside -------------------------
 # Node must be stopped first: a running next start holds handles under .next, and
@@ -190,7 +264,7 @@ npm run build
 if ($LASTEXITCODE -ne 0) { Fail-WithRollback 'next build failed.' }
 
 # --- 5) Start Node + maintenance OFF -----------------------------------------
-if (-not (Bring-SiteUp)) { Fail-WithRollback 'pm2 start failed.' }
+if (-not (Bring-SiteUp)) { Fail-WithRollback 'Node did not come up (pm2 start failed, or nothing listened on the port within 60 s).' }
 
 # --- 6) Only now is the previous build expendable ----------------------------
 Remove-Item $DistPrev -Recurse -Force -ErrorAction SilentlyContinue
@@ -205,4 +279,11 @@ if (-not (Test-NodeInSessionZero)) {
   Write-Host "WARNING: the process on port $Port is not in session 0 (or not listening yet)." -ForegroundColor Yellow
   Write-Host 'If it is in your RDP session it will die when you sign out. See scripts/iis/README.md, "Stray PM2 daemon".' -ForegroundColor Yellow
 }
-Write-Host 'Smoke-test: http://telerp.telmaco.gr/api/health should return {"ok":true,...}.' -ForegroundColor Cyan
+try {
+  $Health = Invoke-WebRequest "http://127.0.0.1:$Port/api/health" -UseBasicParsing -TimeoutSec 15
+  Write-Host "Health: $($Health.StatusCode) $($Health.Content)" -ForegroundColor Cyan
+} catch {
+  Write-Host "Health probe failed: $($_.Exception.Message)" -ForegroundColor Yellow
+  Write-Host '  (503 = Node is up but SQL is not: check the credentials in ecosystem.config.cjs)' -ForegroundColor Yellow
+}
+Write-Host "Smoke-test from a PC: $SiteUrl/api/health should return the same body." -ForegroundColor Cyan

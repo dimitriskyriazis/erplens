@@ -54,9 +54,16 @@ export const SESSION_RENEW_WINDOW_SECONDS = readPositiveSeconds(
 /** Do not re-sign for a gain smaller than this (already pinned to the ceiling). */
 const MIN_RENEW_GAIN_SECONDS = 60;
 
-if (!process.env.SESSION_SECRET && process.env.NODE_ENV === 'production') {
-  // Fail loud once per worker: without the secret nobody can sign in and every session
-  // check fails, which would otherwise look like a mysterious wall of 401s.
+// Fail loud once per worker: without the secret nobody can sign in and every session check
+// fails, which would otherwise look like a mysterious wall of 401s. Not during `next build`
+// (NEXT_PHASE is set by the build and inherited by its workers): the build evaluates route
+// modules with NODE_ENV=production but without PM2's env block, so the warning there is
+// noise, not a misconfiguration. The runtime check in signSession still throws either way.
+if (
+  !process.env.SESSION_SECRET &&
+  process.env.NODE_ENV === 'production' &&
+  process.env.NEXT_PHASE !== 'phase-production-build'
+) {
   console.error('[auth] SESSION_SECRET is not set: sessions cannot be minted or verified');
 }
 
