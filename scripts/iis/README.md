@@ -23,7 +23,7 @@ the end.
 | Authentication at IIS | Windows auth on `/api/me` and `/api/sso` only | Anonymous everywhere |
 | Process manager | `pm2.exe` Windows service (pm2-installer) | The same service, as a second app |
 | PM2 home | `C:\ProgramData\pm2\home` | Same |
-| SQL login | `svc_fastquote` | `svc_telerp`, SELECT on `dbo` and `tlm` only |
+| SQL login | `telerp`, SELECT on `dbo` and `tlm` only |
 | Deploy | `C:\fastquote\scripts\iis\deploy.ps1` | `C:\telerp\scripts\iis\deploy.ps1` |
 
 Both apps share one IIS on port 80 because the bindings differ by host header, and one PM2
