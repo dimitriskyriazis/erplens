@@ -53,6 +53,12 @@ scripts/sql/            hand-over scripts (review, then run manually)
   `CCCCLRMTLINESSTATUS`, both keyed with `COMPANY`.
 - Actions (planned / estimate): `dbo.PRJLINES` with `SOPLTYPE = 12`, one row per resource
   (`RSRC`) per interval, parent task via `PRJLINESS`, `CCCCLRMTESTIMATE` 0 = planned, 1 = estimate.
-- Actions done: `dbo.SOACTION` rows linked to `PRJC` and `PRJLINES`, actor resolved
-  through `USERS` to `RSRC`.
+- Actions done: `dbo.SOACTION` with `SOSOURCE = 2021`, linked to `PRJC` and to a task
+  through `NUM03` (the task's `CCCID`) falling back to `PRJLINES`. `SOACTION.RSRC` is never
+  filled, so the actor is resolved through `RSRC.CCCCLUSERS`.
 - Resources: `tlm.vwRMTResources`. Dependencies table `CCCCLRMTDEPENDENCY` exists but is empty.
+
+**ERPLens reads these base tables directly.** It does not depend on the `dbo.eqrRMT*` views,
+which belong to Soft1's own reports: depending on them would mean we could not change the
+shape we need without touching `dbo`. The relations live in `lib/rmt/*.ts` and were verified
+against those views on 2026-09-17 (identical rows for tasks and for planned/estimate actions).

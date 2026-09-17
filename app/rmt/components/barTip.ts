@@ -55,3 +55,13 @@ export function showBarTip(anchor: HTMLElement, tip: BarTip): void {
 export function hideBarTip(): void {
   if (card) card.hidden = true;
 }
+
+/**
+ * Spread onto a mark to give it the hover card by both pointer and keyboard. Written once
+ * so the two paths cannot drift apart: they were separate literals before, and the focus
+ * copy had already lost a row the mouse copy still showed.
+ */
+export function tipHandlers(tip: BarTip) {
+  const show = (e: { currentTarget: HTMLElement }) => showBarTip(e.currentTarget, tip);
+  return { onMouseEnter: show, onMouseLeave: hideBarTip, onFocus: show, onBlur: hideBarTip };
+}

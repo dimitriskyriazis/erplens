@@ -15,9 +15,9 @@ import { AVAILABILITY_SQL } from './availabilitySql';
  * "booked" days are demand, not capacity. Inactive resources are excluded because they
  * cannot be assigned. The bookings behind every cell come back in a second result set.
  *
- * Column names follow the database (see docs/rmt-views-changes.md). The resource and
- * booking sources are inlined in availabilitySql.ts from the bodies of dbo.eqrRMTResources
- * and dbo.eqrRMTActions until that script has been run on TELDB2.
+ * Column names follow the database. Like tasksRelation.ts and timelineQueries.ts, the
+ * resource and booking sources are read from the base tables directly in availabilitySql.ts
+ * rather than through a dbo view, so ERPLens owns the shape it needs without touching dbo.
  */
 
 export type AvailabilityFilters = {

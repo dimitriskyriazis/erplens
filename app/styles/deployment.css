@@ -1,0 +1,457 @@
+/* RMT deployment: summary records, window control, person-by-week board, roll-call, travel. */
+
+/* Summary records strip */
+.dep-records {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+
+.dep-record {
+  flex: 1 1 150px;
+  padding: 12px 16px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.dep-record:last-child {
+  border-right: 0;
+}
+
+.dep-record-value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.dep-record-label {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Window control */
+.dep-window {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 20px;
+}
+
+.dep-window-spacer {
+  flex: 1 1 20px;
+}
+
+.dep-window-hint {
+  margin-top: 10px;
+}
+
+.dep-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dep-nav button {
+  width: 30px;
+  height: 32px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dep-nav button:hover {
+  background: #f1f5f9;
+}
+
+.dep-range {
+  min-width: 170px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.dep-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dep-presets button {
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dep-presets button:hover {
+  background: #f1f5f9;
+}
+
+.dep-presets button.is-active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+/* The board */
+.dep-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.dep-grid {
+  --dep-name-w: 220px;
+  --dep-total-w: 54px;
+  min-width: calc(var(--dep-name-w) + var(--dep-total-w) + var(--dep-cols) * 30px);
+}
+
+.dep-head-row,
+.dep-row {
+  display: grid;
+  grid-template-columns: var(--dep-name-w) repeat(var(--dep-cols), minmax(0, 1fr)) var(--dep-total-w);
+  gap: 2px;
+  align-items: center;
+}
+
+.dep-head-row {
+  margin-bottom: 4px;
+}
+
+.dep-col-head {
+  border: 0;
+  border-radius: 3px 3px 0 0;
+  background: transparent;
+  padding: 3px 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.dep-col-head:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.dep-col-head.is-active {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.dep-col-sub {
+  font-size: 9px;
+  opacity: 0.75;
+}
+
+.dep-summary-row {
+  margin-bottom: 10px;
+}
+
+.dep-summary-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.dep-total-col.dep-summary-label {
+  text-align: right;
+}
+
+/* Stacked capacity bar per column; 2px gaps keep the segments legible against each other. */
+.dep-summary {
+  height: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.dep-summary:hover,
+.dep-summary:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+.dep-summary i {
+  display: block;
+  min-height: 1px;
+  border-radius: 1px;
+}
+
+.dep-team {
+  margin-bottom: 10px;
+}
+
+.dep-team-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0 5px;
+}
+
+.dep-team-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #0f172a;
+}
+
+.dep-team-meta {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.dep-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.dep-row {
+  margin-bottom: 2px;
+}
+
+.dep-name-col {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-right: 12px;
+  min-width: 0;
+}
+
+.dep-person {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dep-spec {
+  flex: none;
+  max-width: 78px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dep-cell {
+  height: 26px;
+  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.1;
+  cursor: default;
+  overflow: hidden;
+}
+
+.dep-cell.is-empty {
+  border: 1px dashed #e2e8f0;
+}
+
+.dep-cell:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.dep-cell-code {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.dep-cell-sub {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  opacity: 0.85;
+}
+
+.dep-total-col {
+  text-align: right;
+}
+
+.dep-away {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Legend */
+.dep-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.dep-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.dep-legend-item i,
+.roll-group-head i {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.dep-legend-item i.is-empty,
+.roll-group-head i.is-empty {
+  border: 1px dashed #cbd5e1;
+}
+
+.dep-legend-item em {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-style: normal;
+  color: #94a3b8;
+}
+
+/* Roll-call and travel panels side by side */
+.dep-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 12px;
+  /* The two panels are rarely the same length; let each end where its content does
+     rather than stretching the short one into a block of empty card. */
+  align-items: start;
+}
+
+.roll-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.roll-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.roll-group-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.roll-group-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.roll-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.roll-person {
+  font-size: 12px;
+  color: #334155;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 3px 8px;
+}
+
+.roll-person em {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-style: normal;
+  color: #94a3b8;
+  margin-left: 5px;
+}
+
+.travel-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.travel-row {
+  cursor: default;
+  border-radius: 4px;
+}
+
+.travel-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.travel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.travel-name {
+  font-size: 12px;
+  color: #334155;
+}
+
+.travel-total {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.travel-track {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  background: var(--surface-muted);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.travel-track i {
+  display: block;
+  height: 100%;
+}

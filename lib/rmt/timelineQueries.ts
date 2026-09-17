@@ -3,68 +3,85 @@ import { formatDbDateTime } from '@/lib/dbDates';
 import { RMT_TASKS_RELATION } from './tasksRelation';
 
 /**
- * Planned and estimate actions come from the legacy pair dbo.eqrRMTActionsPlanned
- * (CCCCLRMTESTIMATE = 0, named technicians) and dbo.eqrRMTActionsEstimate
- * (CCCCLRMTESTIMATE = 1, generic effort estimates such as "_Installer Generic"). Both are
- * dbo.PRJLINES SOPLTYPE = 12 lines, one row per resource per interval, hanging off a task
- * through PRJLINESS (unique within the project, so always filter on PRJC as well). They
- * are stacked here with an IsEstimate flag. Neither view exposes COMPANY, so dbo.PRJC
- * supplies it; only the estimate view carries the person-days figure.
+ * Planned and estimate actions: dbo.PRJLINES lines with SOPLTYPE = 12, one row per
+ * resource per interval, hanging off a task through PRJLINESS (unique within the project,
+ * so always filter on PRJC as well). CCCCLRMTESTIMATE 0 = a named technician (planned),
+ * 1 = a generic effort estimate such as "_Installer Generic", surfaced as IsEstimate.
+ *
+ * Decision 2026-09-17: read the base table instead of the legacy pair
+ * dbo.eqrRMTActionsPlanned / dbo.eqrRMTActionsEstimate, which belong to Soft1's own
+ * reports. Every column below was verified against those views on 2026-09-17 with zero
+ * differences. One behaviour change: the views hardcoded COMPANY = 1 and so hid 31
+ * company-2 bookings. That filter is gone, because callers filter on COMPANY themselves.
+ *
+ * EstimatePersonDays stays raw CCCCLNUMBEROFRSRC on estimate lines and NULL on planned
+ * ones, which is what the plan screen expects. It is a typed total for the whole span,
+ * not a per-day figure: availabilitySql.ts is what spreads it across working days.
  */
 export const RMT_ACTIONS_RELATION = `(
-SELECT  p.COMPANY,
-        a.PRJC,
-        a.PRJLINESS                     AS TaskLineID,
-        a.PRJLINES                      AS ActionLineID,
-        a.CCCID                         AS ActionID,
-        a.RsrcName                      AS ResourceName,
-        a.RsrcInit                      AS ResourceInitials,
-        a.ActionStart,
-        a.ActionEnd,
-        0                               AS IsEstimate,
-        CASE WHEN ISNULL(a.IsTravel, 0) = 1 THEN 1 ELSE 0 END AS IsTravel,
-        a.ActionDescription             AS Remarks,
-        CAST(NULL AS float)             AS EstimatePersonDays
-FROM    dbo.eqrRMTActionsPlanned a
-JOIN    dbo.PRJC p ON p.PRJC = a.PRJC
-UNION ALL
-SELECT  p.COMPANY,
-        e.PRJC,
-        e.PRJLINESS,
-        e.PRJLINES,
-        e.CCCID,
-        e.RsrcName,
-        e.RsrcInit,
-        e.ActionStart,
-        e.ActionEnd,
-        1,
-        CASE WHEN ISNULL(e.IsTravel, 0) = 1 THEN 1 ELSE 0 END,
-        e.ActionDescription,
-        e.ResEstimatePersonDays
-FROM    dbo.eqrRMTActionsEstimate e
-JOIN    dbo.PRJC p ON p.PRJC = e.PRJC
+SELECT  pl.COMPANY,
+        pl.PRJC,
+        pl.PRJLINESS                    AS TaskLineID,
+        pl.PRJLINES                     AS ActionLineID,
+        pl.CCCID                        AS ActionID,
+        r.NAME                          AS ResourceName,
+        r.CODE1                         AS ResourceInitials,
+        pl.fromdate                     AS ActionStart,
+        pl.finaldate                    AS ActionEnd,
+        ISNULL(pl.CCCCLRMTESTIMATE, 0)  AS IsEstimate,
+        ISNULL(pl.CCCCLISTRAVEL, 0)     AS IsTravel,
+        pl.CCCCLRMTREMARKS              AS Remarks,
+        CASE WHEN ISNULL(pl.CCCCLRMTESTIMATE, 0) = 1
+             THEN CAST(pl.CCCCLNUMBEROFRSRC AS float) END AS EstimatePersonDays
+FROM    dbo.PRJLINES pl
+LEFT JOIN dbo.RSRC r ON r.RSRC = pl.RSRC
+WHERE   pl.SOPLTYPE = 12
 ) AS a`;
 
 /**
- * Actions done: dbo.eqrRMTActionsDone, the legacy view over dbo.SOACTION rows logged
- * against a project and usually a task line, with the actor already resolved to a
- * resource and PersonHoursActual (span minus break) computed inside the view. It has no
- * action id column and no COMPANY, so dbo.PRJC supplies the company.
+ * Actions done: dbo.SOACTION rows with SOSOURCE = 2021, the only value the table holds.
+ * The resource comes from the actor through RSRC.CCCCLUSERS, because SOACTION.RSRC is
+ * never filled; no user has two RSRC rows today, so that join cannot fan out.
+ *
+ * Decision 2026-09-17: read the base table instead of dbo.eqrRMTActionsDone. Two
+ * deliberate changes from that view, both improvements rather than faithful copies:
+ *
+ *   TaskLineID now resolves through NUM03 (the task's global CCCID, which the RMT portal
+ *   fills) and falls back to SOACTION.PRJLINES. The view used PRJLINES alone, which is
+ *   empty on 23,388 of 42,717 rows, so over half of all logged work never attached to a
+ *   task in the timeline. NUM03 resolves 41,819 of them.
+ *
+ *   HoursActual is span minus break, unrounded, with the 14 backwards-dated rows clamped
+ *   to 0. The view rounded to one decimal, so about 3,100 rows shift by up to 0.05 h.
+ *
+ * The view also INNER JOINed RSRC, dropping 7 actions whose actor has no resource row.
+ * They are kept here with a NULL resource rather than silently lost.
  */
 export const RMT_ACTIONS_DONE_RELATION = `(
-SELECT  p.COMPANY,
-        d.PRJC,
-        d.PRJLINES                      AS TaskLineID,
-        d.ResourceID,
-        d.DoneRsrcName                  AS ResourceName,
-        d.DoneRsrcInit                  AS ResourceInitials,
-        d.ActionDoneStart               AS ActionStart,
-        d.ActionDoneEnd                 AS ActionEnd,
-        d.PersonHoursActual             AS HoursActual,
-        d.ActionDescription             AS Description,
-        d.ActionUserRemarks             AS UserRemarks
-FROM    dbo.eqrRMTActionsDone d
-JOIN    dbo.PRJC p ON p.PRJC = d.PRJC
+SELECT  s.COMPANY,
+        s.PRJC,
+        COALESCE(t3.PRJLINES, t2.PRJLINES) AS TaskLineID,
+        r.RSRC                          AS ResourceID,
+        r.NAME                          AS ResourceName,
+        r.CODE1                         AS ResourceInitials,
+        s.FROMDATE                      AS ActionStart,
+        s.FINALDATE                     AS ActionEnd,
+        CAST(CASE WHEN b.mins < 0 THEN 0 ELSE b.mins / 60.0 END AS float) AS HoursActual,
+        s.COMMENTS                      AS Description,
+        s.REMARKS                       AS UserRemarks
+FROM    dbo.SOACTION s
+LEFT JOIN dbo.PRJLINES t3 ON t3.CCCID = TRY_CONVERT(int, s.NUM03) AND t3.SOPLTYPE = 11
+LEFT JOIN dbo.PRJLINES t2 ON t2.COMPANY = s.COMPANY AND t2.PRJC = s.PRJC
+                         AND t2.PRJLINES = s.PRJLINES AND t2.SOPLTYPE = 11
+LEFT JOIN dbo.RSRC r ON r.CCCCLUSERS = s.ACTOR
+-- CCCCLBREAKTIMEH is a time-of-day; it never disagrees with the numeric CCCCLBREAKTIME
+-- on any of the 3,397 rows that carry a break.
+CROSS APPLY (SELECT DATEDIFF(minute, s.FROMDATE, s.FINALDATE)
+                    - ISNULL(DATEPART(hour,   s.CCCCLBREAKTIMEH) * 60
+                           + DATEPART(minute, s.CCCCLBREAKTIMEH), 0) AS mins) AS b
+WHERE   s.SOSOURCE = 2021
+  AND   s.FROMDATE  IS NOT NULL
+  AND   s.FINALDATE IS NOT NULL
 ) AS d`;
 
 export type TimelineProject = { prjc: number; company: number; code: string; name: string };
@@ -179,15 +196,15 @@ ORDER BY d.TaskLineID, d.ActionStart, d.ResourceName;`,
 
 export type RmtProjectHit = TimelineProject & { tasks: number; firstStart: string | null; lastEnd: string | null };
 
-/** Projects that have RMT tasks (as dbo.eqrRMTTasks sees them), matched on code or name (accent-insensitive), newest plan first. */
+/** Projects that have RMT tasks, matched on code or name (accent-insensitive), newest plan first. */
 export async function searchRmtProjects(company: number, q: string, limit = 25): Promise<RmtProjectHit[]> {
   const term = `%${q.trim().toUpperCase()}%`;
   const rows = await readQuery(
     `
 SELECT TOP (@limit) p.PRJC, p.COMPANY, p.CODE, p.NAME, t.tasks, t.first_start, t.last_end
 FROM   dbo.PRJC p
-JOIN  (SELECT PRJC, COUNT(*) AS tasks, MIN(TaskStart) AS first_start, MAX(TaskEnd) AS last_end
-       FROM dbo.eqrRMTTasks GROUP BY PRJC) t
+JOIN  (SELECT v.PRJC, COUNT(*) AS tasks, MIN(v.TaskStart) AS first_start, MAX(v.TaskEnd) AS last_end
+       FROM ${RMT_TASKS_RELATION} GROUP BY v.PRJC) t
        ON t.PRJC = p.PRJC
 WHERE  p.COMPANY = @company
   AND (@term = '%%'

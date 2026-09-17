@@ -1,30 +1,36 @@
 /**
- * RMT task grain: one row per task in dbo.eqrRMTTasks, the legacy RMT view the Soft1
- * reports already read (dbo.PRJLINES lines with SOPLTYPE = 11, INNER JOINed to the phase
- * and status lookups, COMPANY 1 and 2 hardcoded inside the view).
+ * RMT task grain: one row per dbo.PRJLINES line with SOPLTYPE = 11.
  *
- * Decision 2026-09-14: ERPLens reads the existing dbo.eqrRMT* views instead of new tlm
- * views, so every consumer sees the same task population. The view exposes no COMPANY,
- * project code or name, so dbo.PRJC is joined here (PRJC is globally unique). Everything
- * else comes from the view as is; DurationDays is the only derived column.
+ * Decision 2026-09-17: read the base tables directly instead of dbo.eqrRMTTasks. That view
+ * belongs to Soft1's own reports, and depending on it meant ERPLens could not change its
+ * shape without touching dbo. The body below was reproduced from the view and verified
+ * against it on 2026-09-17: identical 7,212 rows, zero differences on any column.
+ *
+ * Both lookups are INNER JOINed, which is what the view does and what sets the population.
+ * It excludes the 13 SOPLTYPE = 11 lines that have neither a phase nor a status set. The
+ * view also hardcoded COMPANY; that filter is dropped here because every caller already
+ * filters on COMPANY itself. DurationDays is the only derived column.
  */
 export const RMT_TASKS_RELATION = `(
-SELECT  p.COMPANY,
-        t.PRJC,
+SELECT  pl.COMPANY,
+        pl.PRJC,
         p.CODE                          AS ProjectCode,
         p.NAME                          AS ProjectName,
-        t.PRJLINES                      AS TaskLineID,
-        t.TaskID,
-        t.TaskName,
-        t.TaskStart,
-        t.TaskEnd,
-        DATEDIFF(day, t.TaskStart, t.TaskEnd) + 1 AS DurationDays,
-        t.TaskPhaseCode,
-        t.TaskPhaseName,
-        t.TaskStatusCode,
-        t.TaskStatusName
-FROM    dbo.eqrRMTTasks t
-JOIN    dbo.PRJC p ON p.PRJC = t.PRJC
+        pl.PRJLINES                     AS TaskLineID,
+        pl.CCCID                        AS TaskID,
+        pl.NAME                         AS TaskName,
+        pl.fromdate                     AS TaskStart,
+        pl.finaldate                    AS TaskEnd,
+        DATEDIFF(day, pl.fromdate, pl.finaldate) + 1 AS DurationDays,
+        st.CODE                         AS TaskPhaseCode,
+        st.NAME                         AS TaskPhaseName,
+        ls.CODE                         AS TaskStatusCode,
+        ls.NAME                         AS TaskStatusName
+FROM    dbo.PRJLINES pl
+JOIN    dbo.PRJC p ON p.PRJC = pl.PRJC
+JOIN    dbo.CCCCLRMTSTATUSTYPE  st ON st.COMPANY = pl.COMPANY AND st.CCCCLRMTSTATUSTYPE  = pl.CCCCLRMTSTATUSTYPE
+JOIN    dbo.CCCCLRMTLINESSTATUS ls ON ls.COMPANY = pl.COMPANY AND ls.CCCCLRMTLINESSTATUS = pl.CCCCLRMTLINESSTATUS
+WHERE   pl.SOPLTYPE = 11
 ) AS v`;
 
 /** Whitelist: grid colId -> expression. Anything not listed cannot be filtered or sorted. */

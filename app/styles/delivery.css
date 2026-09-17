@@ -1,0 +1,360 @@
+/* RMT plan vs actual: project/task comparison table, overrun histogram, attention list. */
+
+.del-table {
+  --del-cols: 112px minmax(140px, 1fr) 210px 92px 92px 84px;
+}
+
+.del-head,
+.del-row,
+.del-task {
+  display: grid;
+  grid-template-columns: var(--del-cols);
+  gap: 12px;
+  align-items: center;
+}
+
+.del-head {
+  padding: 14px 0 8px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.del-head .del-num {
+  text-align: right;
+}
+
+.del-row {
+  width: 100%;
+  padding: 9px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.del-row:hover {
+  background: var(--surface-muted);
+}
+
+.del-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.del-group.is-open .del-row {
+  background: var(--surface-muted);
+}
+
+.del-code {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.del-caret {
+  font-size: 9px;
+  font-style: normal;
+  color: #94a3b8;
+}
+
+.del-name {
+  font-size: 12px;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.del-num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #475569;
+  font-variant-numeric: tabular-nums;
+}
+
+.del-num.is-strong {
+  color: #0f172a;
+}
+
+.del-num.is-over {
+  color: #d03b3b;
+  font-weight: 600;
+}
+
+/* The comparison bar. The plan marker is fixed at two thirds of the track, so bars are
+   comparable down the column and anything past the tick is over estimate. */
+.del-bar {
+  position: relative;
+  display: block;
+  height: 14px;
+  background: var(--surface-muted);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.del-bar.is-task {
+  height: 10px;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+}
+
+.del-bar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: block;
+}
+
+.del-bar-done {
+  left: 0;
+  background: #334155;
+  border-radius: 3px 0 0 3px;
+}
+
+.del-bar-over {
+  background: #d03b3b;
+}
+
+.del-bar-plan {
+  width: 1px;
+  background: #94a3b8;
+  top: -2px;
+  bottom: -2px;
+}
+
+/* Logged work with no estimate behind it: say so rather than draw an empty track. */
+.del-no-plan {
+  display: inline-flex;
+  align-items: center;
+  height: 14px;
+  padding: 0 8px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 3px;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.del-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.del-legend i {
+  width: 16px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.del-legend i + i,
+.del-swatch-over {
+  margin-left: 8px;
+}
+
+.del-swatch-done {
+  background: #334155;
+}
+
+.del-swatch-over {
+  background: #d03b3b;
+}
+
+/* Expanded tasks */
+.del-tasks {
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 4px 0;
+}
+
+.del-task {
+  padding: 6px 0 6px 20px;
+}
+
+.del-task-id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.del-task-name {
+  font-size: 12px;
+  color: #334155;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.del-task-name em {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-style: normal;
+  color: #94a3b8;
+}
+
+.del-task .del-num {
+  font-size: 11px;
+}
+
+.del-task-empty {
+  padding: 8px 0 8px 20px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* Orphan-hours banner */
+.del-orphan {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-left: 3px solid #d03b3b;
+}
+
+.del-orphan-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.del-orphan-text {
+  font-size: 12px;
+  color: #475569;
+}
+
+/* Histogram */
+.hist {
+  display: flex;
+  gap: 6px;
+  height: 150px;
+  align-items: flex-end;
+  margin-top: 14px;
+}
+
+.hist-col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  cursor: default;
+  border-radius: 3px 3px 0 0;
+}
+
+.hist-col:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.hist-value {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #64748b;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.hist-bar {
+  display: block;
+  min-height: 2px;
+  background: #64748b;
+  border-radius: 3px 3px 0 0;
+}
+
+.hist-bar.is-over {
+  background: #d03b3b;
+}
+
+.hist-axis {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.hist-label {
+  flex: 1;
+  text-align: center;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+/* Needs attention */
+.attn {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.attn-row {
+  display: grid;
+  grid-template-columns: 58px minmax(80px, 1fr) 76px 132px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.attn-row:last-child {
+  border-bottom: 0;
+}
+
+.attn-id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.attn-name {
+  font-size: 12px;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attn-code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #64748b;
+}
+
+/* Status wears an icon and words, never colour on its own. */
+.attn-why {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.attn-why i {
+  font-style: normal;
+  font-size: 10px;
+}
+
+.attn-why.is-over {
+  color: #d03b3b;
+}
+
+.attn-why.is-stalled {
+  color: #8f6318;
+}

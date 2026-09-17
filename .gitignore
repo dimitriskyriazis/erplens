@@ -89,3 +89,6 @@ ecosystem.config.cjs
 # Agent files
 AGENTS.md
 CLAUDE.md
+
+# Claude Design files
+design ideas/

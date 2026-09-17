@@ -5,6 +5,8 @@ import './styles/layout.css';
 import './styles/page.css';
 import './styles/auth.css';
 import './styles/availability.css';
+import './styles/deployment.css';
+import './styles/delivery.css';
 import SideNav, { SIDENAV_COLLAPSED_COOKIE_NAME } from './components/SideNav';
 import { AuthProvider } from './components/AuthProvider';
 

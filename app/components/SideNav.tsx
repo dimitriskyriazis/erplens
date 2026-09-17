@@ -20,6 +20,8 @@ const navItems: NavItem[] = [
       { label: 'Tasks', href: '/rmt/tasks' },
       { label: 'Plan', href: '/rmt/plan' },
       { label: 'Availability', href: '/rmt/availability' },
+      { label: 'Deployment', href: '/rmt/deployment' },
+      { label: 'Plan vs actual', href: '/rmt/delivery' },
     ],
   },
 ];
