@@ -17,7 +17,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
         { id: 1, name: 'Company 1' },
         { id: 2, name: 'Company 2' },
       ];
-  const defaultCompany = Number(process.env.TELERP_DEFAULT_COMPANY ?? 1);
+  const defaultCompany = Number(process.env.ERPLENS_DEFAULT_COMPANY ?? 1);
   const company = Number(first(sp.company)) || defaultCompany;
   const prjc = Number(first(sp.prjc)) || null;
   return <RmtPlanClient companies={companies} initialCompany={company} initialPrjc={prjc} />;

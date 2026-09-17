@@ -2,7 +2,7 @@
 
 import type { CustomCellRendererProps } from 'ag-grid-react';
 import { DAY_MS, fmtDateTime, shortName, type PlanBar, type PlanRow, type TimeScale } from '@/lib/rmt/planModel';
-import { hideBarTip, showBarTip, type BarTip } from './barTip';
+import { hideBarTip, showBarTip, type BarTip } from '@/app/rmt/components/barTip';
 
 type Ctx = { scale: TimeScale };
 

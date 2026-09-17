@@ -13,7 +13,7 @@ export default function Page() {
       <header className={styles.topBar}>
         <div className={styles.brandRow}>
           <h1 className={styles.brandTitle}>
-            <span className={styles.brandAccent}>Tel</span>ERP
+            <span className={styles.brandAccent}>ERP</span>Lens
           </h1>
           <div className={styles.poweredBy}>
             <Image src="/telmaco.jpg" alt="Telmaco logo" width={480} height={160} className={styles.logoImage} loading="eager" />

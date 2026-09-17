@@ -3,7 +3,7 @@
  * reports already read (dbo.PRJLINES lines with SOPLTYPE = 11, INNER JOINed to the phase
  * and status lookups, COMPANY 1 and 2 hardcoded inside the view).
  *
- * Decision 2026-09-14: TelERP reads the existing dbo.eqrRMT* views instead of new tlm
+ * Decision 2026-09-14: ERPLens reads the existing dbo.eqrRMT* views instead of new tlm
  * views, so every consumer sees the same task population. The view exposes no COMPANY,
  * project code or name, so dbo.PRJC is joined here (PRJC is globally unique). Everything
  * else comes from the view as is; DurationDays is the only derived column.

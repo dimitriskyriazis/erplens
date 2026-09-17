@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { getProjectTimeline } from '@/lib/rmt/timelineQueries';
 
 const querySchema = z.object({
-  company: z.coerce.number().int().min(1).max(99).default(Number(process.env.TELERP_DEFAULT_COMPANY ?? 1)),
+  company: z.coerce.number().int().min(1).max(99).default(Number(process.env.ERPLENS_DEFAULT_COMPANY ?? 1)),
   prjc: z.coerce.number().int().min(1),
 });
 

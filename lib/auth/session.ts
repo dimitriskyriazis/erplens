@@ -1,5 +1,5 @@
 /**
- * TelERP session cookie: FastQuote's scheme, unchanged.
+ * ERPLens session cookie: FastQuote's scheme, unchanged.
  *
  *   value   = base64url(JSON payload) + '.' + base64url(HMAC-SHA256(payloadEncoded, SESSION_SECRET))
  *   payload = { uid, win, iat, exp }   user id in tlm.Users, Windows identity, issued, expiry

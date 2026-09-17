@@ -17,12 +17,12 @@ import {
 import { AllEnterpriseModule, LicenseManager } from 'ag-grid-enterprise';
 
 declare global {
-  var __TELERP_AG_GRID_READY__: boolean | undefined;
+  var __ERPLENS_AG_GRID_READY__: boolean | undefined;
 }
-if (!globalThis.__TELERP_AG_GRID_READY__) {
+if (!globalThis.__ERPLENS_AG_GRID_READY__) {
   ModuleRegistry.registerModules([AllEnterpriseModule]);
   LicenseManager.setLicenseKey(process.env.NEXT_PUBLIC_AG_GRID_LICENSE ?? '');
-  globalThis.__TELERP_AG_GRID_READY__ = true;
+  globalThis.__ERPLENS_AG_GRID_READY__ = true;
 }
 
 export type GridRow = Record<string, unknown>;
@@ -50,7 +50,7 @@ type ColumnFilterModel =
   | { filterType: 'set'; values: string[] };
 
 export const MENU_ICON = (path: string) =>
-  `<span class="telerp-menu-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
+  `<span class="erplens-menu-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
 
 const FILTER_ICON = MENU_ICON('<path d="M3 4h14l-5.5 5.5v5l-3-1.5v-3.5L3 4z" />');
 

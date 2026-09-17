@@ -1,0 +1,576 @@
+/* RMT availability: filter card, "Who is available" table, week-by-week heatmap. */
+
+.avail-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 4px;
+}
+
+.avail-card {
+  flex: 0 0 auto;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 14px 18px 12px;
+  transition: opacity 150ms ease;
+}
+
+/* Refetch keeps the frame: the previous slice stays put, dimmed, until the new one lands. */
+.avail-card.is-loading {
+  opacity: 0.55;
+}
+
+.avail-card h2 {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.avail-kicker {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #c2410c;
+  margin-bottom: 2px;
+}
+
+.avail-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.avail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin-bottom: 12px;
+}
+
+.avail-controls {
+  display: flex;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+.avail-control {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.avail-control-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+/* Filter card */
+.avail-filters {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+}
+
+.avail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.avail-field select {
+  height: 32px;
+  min-width: 170px;
+  max-width: 260px;
+  padding: 0 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.avail-field select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.avail-hint {
+  margin: 0 0 6px auto;
+  max-width: 300px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+/* Segmented control, shared by every toggle on the page. */
+.seg {
+  display: inline-flex;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.seg button {
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-left: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.seg button:first-child {
+  border-left: 0;
+}
+
+.seg button:hover:not(:disabled):not(.is-active) {
+  background: #f1f5f9;
+}
+
+.seg button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.seg button.is-active {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.seg button:disabled {
+  cursor: default;
+  color: #0f172a;
+}
+
+.seg .seg-text {
+  min-width: 150px;
+  font-variant-numeric: tabular-nums;
+}
+
+.avail-head .seg button,
+.avail-control .seg button {
+  height: 28px;
+}
+
+/* Footer line under each view */
+.avail-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.avail-foot strong {
+  color: #0f172a;
+}
+
+.avail-foot .is-alert {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.avail-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: #2563eb;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Who is available */
+.assign-wrap {
+  overflow-x: auto;
+}
+
+table.assign {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.assign th {
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.assign td {
+  padding: 7px 8px;
+  border-bottom: 1px solid #eef2f7;
+  vertical-align: middle;
+}
+
+.assign tr.is-pinned td {
+  background: #f8fafc;
+}
+
+.assign .rank {
+  width: 28px;
+  text-align: center;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.assign .who {
+  white-space: nowrap;
+}
+
+.assign .name-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: #0f172a;
+  cursor: pointer;
+  text-align: left;
+}
+
+.assign .name-btn:hover {
+  text-decoration: underline;
+}
+
+.assign tr.is-pinned .name-btn::before {
+  content: '\25B8';
+  color: #c2410c;
+  margin-right: 4px;
+}
+
+.assign .init {
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.assign .meta {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.assign .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.assign .total {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.assign .next {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #64748b;
+}
+
+.assign .fit {
+  font-size: 12px;
+}
+
+.assign .fit--yes {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.assign .fit--no {
+  color: #64748b;
+}
+
+/* One strip per week: equal cells, a 2px surface gap between them, value printed. */
+.assign .weeks {
+  display: flex;
+  gap: 2px;
+  min-width: 140px;
+}
+
+.mini {
+  flex: 1 1 0;
+  min-width: 42px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  cursor: default;
+}
+
+.mini:hover,
+.mini:focus-visible {
+  outline: 2px solid #0f172a;
+  outline-offset: -1px;
+}
+
+/* Heatmap */
+.heat {
+  overflow-x: auto;
+}
+
+.heat table {
+  border-collapse: separate;
+  border-spacing: 2px;
+  font-size: 12px;
+}
+
+.heat th {
+  padding: 2px 4px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.heat th.week {
+  font-family: var(--font-mono);
+  text-align: center;
+}
+
+/* Alternate months take a second ink so the eye can group the columns. */
+.heat th.week.alt {
+  color: #2563eb;
+}
+
+.heat th.week.is-now {
+  color: #0f172a;
+  text-decoration: underline;
+  text-decoration-color: #c2410c;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.heat th.total,
+.heat td.total {
+  text-align: right;
+  padding-left: 10px;
+}
+
+.heat td.init {
+  padding-right: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: #94a3b8;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.heat td.name {
+  padding-right: 10px;
+  max-width: 190px;
+}
+
+.heat td.name button,
+.heat td.name span {
+  display: block;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.heat td.name span {
+  cursor: default;
+}
+
+.heat td.name button:hover {
+  text-decoration: underline;
+}
+
+.heat td.name.is-generic span {
+  font-style: italic;
+  color: #475569;
+}
+
+.heat tr.is-pinned td.name button {
+  font-weight: 600;
+}
+
+.heat tr.is-pinned td.name button::before {
+  content: '\25B8';
+  color: #c2410c;
+  margin-right: 4px;
+}
+
+.heat td.cell {
+  width: 52px;
+  min-width: 52px;
+  height: 24px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: default;
+}
+
+.heat td.cell:hover,
+.heat td.cell:focus-visible {
+  outline: 2px solid #0f172a;
+  outline-offset: -1px;
+}
+
+.heat td.total {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.heat-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0 0 12px;
+  font-size: 11.5px;
+  color: #475569;
+}
+
+.heat-legend i {
+  display: inline-block;
+  width: 24px;
+  height: 14px;
+  border-radius: 2px;
+}
+
+.heat-legend span + i {
+  margin-left: 3px;
+}
+
+.heat-legend i + span {
+  margin-left: 3px;
+  margin-right: 10px;
+}
+
+/*
+ * Colour levels. Free days: one green ramp, light to dark, the light end receding toward
+ * the surface as the palette rule allows for a heatmap; every cell prints its number.
+ * Booked days: the same steps in blue, so the mode is obvious at a glance. Red is reserved
+ * for demand above the week. Dark ink on the four lighter steps, white on the darkest.
+ */
+.lvl-0 {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.lvl-1 {
+  background: #d3efd9;
+  color: #0f172a;
+}
+
+.lvl-2 {
+  background: #a3dcb1;
+  color: #0f172a;
+}
+
+.lvl-3 {
+  background: #6cc283;
+  color: #0f172a;
+}
+
+.lvl-4 {
+  background: #38a256;
+  color: #0f172a;
+}
+
+.lvl-5 {
+  background: #1d7a3b;
+  color: #ffffff;
+}
+
+.lvl-over {
+  background: #dc2626;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* Booked days, and the demand rows of generic placeholders in either mode. */
+.mode-booked .lvl-0,
+.is-demand.lvl-0 {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+.mode-booked .lvl-1,
+.is-demand.lvl-1 {
+  background: #d6e6fb;
+}
+
+.mode-booked .lvl-2,
+.is-demand.lvl-2 {
+  background: #a9c8f3;
+}
+
+.mode-booked .lvl-3,
+.is-demand.lvl-3 {
+  background: #74a6e8;
+}
+
+.mode-booked .lvl-4,
+.is-demand.lvl-4 {
+  background: #3f7fd6;
+}
+
+.mode-booked .lvl-5,
+.is-demand.lvl-5 {
+  background: #1f5cab;
+}
+
+.heat td.total.is-demand {
+  font-weight: 500;
+  font-style: italic;
+  color: #475569;
+}

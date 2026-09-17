@@ -219,12 +219,3 @@
   padding: 0 0 12px;
   gap: 0;
 }
-
-.side-nav__footer {
-  padding: 10px 8px 0;
-  font-size: 0.75rem;
-}
-
-.side-nav__footer .side-nav__label {
-  color: rgba(189, 189, 189, 0.7);
-}

@@ -15,10 +15,14 @@ export default function UserBadge({ collapsed }: { collapsed: boolean }) {
 
   const raw = user?.username ?? windowsUserName ?? null;
   const name = raw ? bareUserName(raw) : null;
+  // Absent when the user has no RoleID, or when only the Windows identity is known (the
+  // degraded /api/session path). The line is then dropped rather than shown empty.
+  const role = user?.roleName ?? null;
 
   return (
     <div className="side-nav__user" aria-live="polite">
       <p className="side-nav__user-name">{name ?? 'Not signed in'}</p>
+      {role ? <p className="side-nav__user-detail">{role}</p> : null}
       {!name && !authRequired ? <p className="side-nav__user-detail">Anonymous access</p> : null}
     </div>
   );

@@ -19,11 +19,12 @@ const navItems: NavItem[] = [
     subItems: [
       { label: 'Tasks', href: '/rmt/tasks' },
       { label: 'Plan', href: '/rmt/plan' },
+      { label: 'Availability', href: '/rmt/availability' },
     ],
   },
 ];
 
-export const SIDENAV_COLLAPSED_COOKIE_NAME = 'telerp_sidenav_collapsed';
+export const SIDENAV_COLLAPSED_COOKIE_NAME = 'erplens_sidenav_collapsed';
 
 type SideNavProps = { initialCollapsed?: boolean };
 
@@ -101,9 +102,6 @@ export default function SideNav({ initialCollapsed = false }: SideNavProps) {
       </nav>
       <div className="side-nav__divider" aria-hidden="true" />
       <UserBadge collapsed={collapsed} />
-      <div className="side-nav__footer">
-        <span className="side-nav__label">TelERP · read-only on Soft1</span>
-      </div>
     </aside>
   );
 }

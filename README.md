@@ -1,4 +1,4 @@
-# TelERP
+# ERPLens
 
 Operational views and live stats over the Soft1 ERP (SOFT1_ERP on TELDB2) for three
 domains: Projects (sales and delivery), RMT (resource management) and Maintenance

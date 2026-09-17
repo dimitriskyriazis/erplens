@@ -16,17 +16,17 @@ import {
 import { AllEnterpriseModule, LicenseManager } from 'ag-grid-enterprise';
 import TimelineCell from './TimelineCell';
 import TimelineHeader from './TimelineHeader';
-import { hideBarTip } from './barTip';
+import { hideBarTip } from '@/app/rmt/components/barTip';
 import { DAY_MS, buildPlanModel, fmtDate, shortName, type PlanRow, type Range, type TimeScale } from '@/lib/rmt/planModel';
 import type { ProjectTimeline } from '@/lib/rmt/timelineQueries';
 
 declare global {
-  var __TELERP_AG_GRID_READY__: boolean | undefined;
+  var __ERPLENS_AG_GRID_READY__: boolean | undefined;
 }
-if (!globalThis.__TELERP_AG_GRID_READY__) {
+if (!globalThis.__ERPLENS_AG_GRID_READY__) {
   ModuleRegistry.registerModules([AllEnterpriseModule]);
   LicenseManager.setLicenseKey(process.env.NEXT_PUBLIC_AG_GRID_LICENSE ?? '');
-  globalThis.__TELERP_AG_GRID_READY__ = true;
+  globalThis.__ERPLENS_AG_GRID_READY__ = true;
 }
 
 const gridTheme = themeQuartz.withParams({

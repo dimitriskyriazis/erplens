@@ -12,6 +12,6 @@ export default async function Page() {
         { id: 1, name: 'Company 1' },
         { id: 2, name: 'Company 2' },
       ];
-  const defaultCompany = Number(process.env.TELERP_DEFAULT_COMPANY ?? 1);
+  const defaultCompany = Number(process.env.ERPLENS_DEFAULT_COMPANY ?? 1);
   return <RmtTasksClient companies={companies} defaultCompany={defaultCompany} />;
 }

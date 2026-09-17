@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * One shared hover card for every bar in the plan timeline, instead of the browser's
- * native title tooltip. Imperative on purpose: hundreds of bars can be on screen, and a
- * React state change per hover would re-render cells for nothing. Text is written with
- * textContent, never HTML, because remarks come straight from Soft1.
+ * One shared hover card for the RMT screens (plan timeline bars, availability cells),
+ * instead of the browser's native title tooltip. Imperative on purpose: hundreds of marks
+ * can be on screen, and a React state change per hover would re-render cells for nothing.
+ * Text is written with textContent, never HTML, because remarks come straight from Soft1.
  */
 export type BarTip = { heading: string; rows: Array<[label: string, value: string]> };
 
@@ -38,7 +38,7 @@ export function showBarTip(anchor: HTMLElement, tip: BarTip): void {
   });
   el.appendChild(dl);
 
-  // Measure, then place below the bar, or above it when there is no room; keep it on screen.
+  // Measure, then place below the anchor, or above it when there is no room; keep it on screen.
   el.hidden = false;
   el.style.left = '0px';
   el.style.top = '0px';

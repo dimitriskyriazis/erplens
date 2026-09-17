@@ -20,7 +20,7 @@
   --border-subtle: rgba(15, 23, 42, 0.08);
   --text-muted: #475569;
   --panel-shadow: rgba(15, 23, 42, 0.08);
-  /* TelERP accent: light blue (FastQuote uses red). */
+  /* ERPLens accent: light blue (FastQuote uses red). */
   --accent: #3ba7f0;
   --accent-shadow: rgba(59, 167, 240, 0.35);
   --accent-ring: rgba(59, 167, 240, 0.25);

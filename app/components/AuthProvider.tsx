@@ -19,7 +19,14 @@ import { SESSION_EXP_COOKIE_NAME } from '@/lib/auth/constants';
  * how accounts get locked out.
  */
 
-export type AuthUser = { id: number; username: string; domainName: string | null };
+/** Mirrors AppUser in lib/auth/userLookup.ts; /api/me and /api/session return it verbatim. */
+export type AuthUser = {
+  id: number;
+  username: string;
+  domainName: string | null;
+  roleId: number | null;
+  roleName: string | null;
+};
 
 type AuthStatus = 'checking' | 'ready' | 'denied' | 'unavailable';
 
@@ -301,7 +308,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             </p>
           ) : (
             <p className="auth-screen__message">
-              TelERP could not reach the sign-in service. It may be restarting.
+              ERPLens could not reach the sign-in service. It may be restarting.
             </p>
           )}
           <p className="auth-screen__message">

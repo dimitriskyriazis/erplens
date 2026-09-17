@@ -4,11 +4,12 @@ import './styles/base.css';
 import './styles/layout.css';
 import './styles/page.css';
 import './styles/auth.css';
+import './styles/availability.css';
 import SideNav, { SIDENAV_COLLAPSED_COOKIE_NAME } from './components/SideNav';
 import { AuthProvider } from './components/AuthProvider';
 
 export const metadata: Metadata = {
-  title: 'TelERP',
+  title: 'ERPLens',
   description: 'Operational views and stats over Soft1 for RMT',
   icons: { icon: '/favicon.ico' },
 };

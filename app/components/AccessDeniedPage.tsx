@@ -11,7 +11,7 @@ export default function AccessDeniedPage({ windowsIdentity }: Props) {
       <div className="auth-screen__card">
         <h1 className="auth-screen__title">Access denied</h1>
         <p className="auth-screen__message">
-          You signed in with a domain account that is not authorised for TelERP.
+          You signed in with a domain account that is not authorised for ERPLens.
         </p>
         <p className="auth-screen__message">
           To request access, contact <strong>Dimitris Kyriazis (dim.kyriazis@telmaco.gr)</strong>.

@@ -1,7 +1,7 @@
 /**
  * Connection to the live Soft1 ERP database (SOFT1_ERP on TELDB2).
  *
- * TelERP is READ-ONLY against this database. That is a hard rule, not a convention:
+ * ERPLens is READ-ONLY against this database. That is a hard rule, not a convention:
  * every statement goes through readQuery(), which refuses anything that is not a
  * SELECT. Schema work (tlm views/procs) is delivered as scripts under scripts/sql and
  * run by a person, never by the app.
@@ -28,7 +28,7 @@ function buildErpConfig(): SqlConfig {
       encrypt: process.env.SOFT1_ERP_ENCRYPT === 'true',
       trustServerCertificate: process.env.SOFT1_ERP_TRUST_CERT === 'true',
       requestTimeout: Number(process.env.SOFT1_ERP_REQUEST_TIMEOUT ?? 30000),
-      appName: 'TelERP',
+      appName: 'ERPLens',
       // ApplicationIntent=ReadOnly. Ignored by a standalone instance; routes to a
       // readable secondary if the ERP ever moves into an availability group.
       readOnlyIntent: true,
@@ -40,22 +40,22 @@ function buildErpConfig(): SqlConfig {
 // Cached on globalThis so `next dev` hot reloads reuse the pool instead of opening a
 // new one per module instance.
 declare global {
-  var __TELERP_ERP_POOL__: Promise<ConnectionPool> | undefined;
+  var __ERPLENS_ERP_POOL__: Promise<ConnectionPool> | undefined;
 }
 
 export async function getErpPool(): Promise<ConnectionPool> {
-  if (!globalThis.__TELERP_ERP_POOL__) {
+  if (!globalThis.__ERPLENS_ERP_POOL__) {
     const config = buildErpConfig();
-    globalThis.__TELERP_ERP_POOL__ = new sql.ConnectionPool(config)
+    globalThis.__ERPLENS_ERP_POOL__ = new sql.ConnectionPool(config)
       .connect()
       .catch((err: unknown) => {
-        globalThis.__TELERP_ERP_POOL__ = undefined;
+        globalThis.__ERPLENS_ERP_POOL__ = undefined;
         throw err;
       });
   }
-  const pool = await globalThis.__TELERP_ERP_POOL__;
+  const pool = await globalThis.__ERPLENS_ERP_POOL__;
   if (!pool.connected) {
-    globalThis.__TELERP_ERP_POOL__ = undefined;
+    globalThis.__ERPLENS_ERP_POOL__ = undefined;
     return getErpPool();
   }
   return pool;
@@ -77,7 +77,7 @@ export function assertReadOnlySql(text: string): void {
   }
   const hit = stripped.match(WRITE_OR_DDL);
   if (hit) {
-    throw new Error(`Refused: SOFT1_ERP is read-only for TelERP (found ${hit[1].toUpperCase()})`);
+    throw new Error(`Refused: SOFT1_ERP is read-only for ERPLens (found ${hit[1].toUpperCase()})`);
   }
 }
 

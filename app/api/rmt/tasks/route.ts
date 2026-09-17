@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   const parsed = await readGridRequest(req);
   if (!parsed.ok) return parsed.response;
   const request = parsed.request;
-  const company = request.company ?? Number(process.env.TELERP_DEFAULT_COMPANY ?? 1);
+  const company = request.company ?? Number(process.env.ERPLENS_DEFAULT_COMPANY ?? 1);
   const { offset, limit } = pageWindow(request);
 
   const filters = buildFilterPredicates(request.filterModel, RMT_TASKS_COLUMNS, { preserveTime: true });

@@ -1,6 +1,6 @@
 #Requires -RunAsAdministrator
 <#
-  TELERP production deploy on TelApp1. Adapted from C:\fastquote\scripts\iis\deploy.ps1.
+  ERPLens production deploy on TelApp1. Adapted from C:\fastquote\scripts\iis\deploy.ps1.
   Run via deploy.bat (which elevates and calls this with -File).
 
   Flow: maintenance gate ON (flag + pool recycle, then PROVE the page is served) -> pull
@@ -10,10 +10,10 @@
   half-deployed / stopped backend.
 
   GATE GOTCHA (2026-09-14): IIS kept answering from its caches after the flag file appeared,
-  so on TelERP's 20-second deploys the flag alone did nothing and users got 502s the whole
+  so on ERPLens's 20-second deploys the flag alone did nothing and users got 502s the whole
   time Node was down (IIS log W3SVC3: 502.3, win32 status 12029). The mirror problem was
   already known: deleting the flag alone leaves the site stuck on the page. Both directions
-  get the same cure, a recycle of the telerp pool right after touching the flag, and the gate
+  get the same cure, a recycle of the erplens pool right after touching the flag, and the gate
   is verified with a real request before Node is stopped.
 
   ROLLBACK: next build overwrites .next in place. We rename .next to .next.prev before
@@ -30,19 +30,19 @@
 #>
 
 # --- Paths -------------------------------------------------------------------
-$AppRoot   = 'C:\telerp'                 # Node app + git repo (PM2 runs from here)
-$SiteRoot  = 'C:\apps\telerp\wwwroot'    # IIS site physical path (web.config + maintenance.html)
-$AppPool   = 'telerp'                    # IIS application pool name
-$Pm2Name   = 'telerp'                    # "name" in ecosystem.config.cjs
+$AppRoot   = 'C:\erplens'                 # Node app + git repo (PM2 runs from here)
+$SiteRoot  = 'C:\apps\erplens\wwwroot'    # IIS site physical path (web.config + maintenance.html)
+$AppPool   = 'erplens'                    # IIS application pool name
+$Pm2Name   = 'erplens'                    # "name" in ecosystem.config.cjs
 $Port      = 3001                        # -p in ecosystem.config.cjs (3000 is FastQuote)
 $Flag      = Join-Path $SiteRoot 'maintenance.flag'
 $Dist      = Join-Path $AppRoot '.next'
 $DistPrev  = Join-Path $AppRoot '.next.prev'
 $Ecosystem = Join-Path $AppRoot 'ecosystem.config.cjs'
-$SiteUrl   = 'http://telerp.telmaco.gr'  # IIS binding (host header); resolves to this server
+$SiteUrl   = 'http://erplens.telmaco.gr'  # IIS binding (host header); resolves to this server
 $MaintSrc  = Join-Path $AppRoot  'scripts\iis\maintenance.html'   # tracked page
 $MaintLive = Join-Path $SiteRoot 'maintenance.html'               # the page IIS serves
-$WebCfgSrc  = Join-Path $AppRoot  'scripts\iis\telerp.web.config'
+$WebCfgSrc  = Join-Path $AppRoot  'scripts\iis\erplens.web.config'
 $WebCfgLive = Join-Path $SiteRoot 'web.config'
 
 # Machine-wide PM2 home used by the pm2.exe service. Never let a user-level value win.
@@ -235,7 +235,7 @@ git pull
 if ($LASTEXITCODE -ne 0) { Fail-Early 'git pull failed (dirty working tree or network).' }
 Sync-MaintenancePage   # the pull may have changed the page; IIS serves the new one from here on
 if ((Test-Path $WebCfgSrc) -and (Test-Path $WebCfgLive) -and (Compare-Object (Get-Content $WebCfgSrc) (Get-Content $WebCfgLive))) {
-  Write-Host "NOTE: $WebCfgLive differs from scripts\iis\telerp.web.config. Review the diff and copy it by hand (README, Phase 2 B)." -ForegroundColor Yellow
+  Write-Host "NOTE: $WebCfgLive differs from scripts\iis\erplens.web.config. Review the diff and copy it by hand (README, Phase 2 B)." -ForegroundColor Yellow
 }
 
 # --- 3) Stop Node, then set the previous build aside -------------------------

@@ -497,7 +497,7 @@
 }
 
 /* Icons inside AG Grid context-menu items (markup built in ServerSideGrid.MENU_ICON) */
-.telerp-menu-icon {
+.erplens-menu-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -507,7 +507,7 @@
   color: #334155;
 }
 
-/* Hover card for plan timeline bars (one shared element, see app/rmt/plan/barTip.ts) */
+/* Hover card for plan timeline bars and availability cells (one shared element, see app/rmt/components/barTip.ts) */
 .tl-tip {
   position: fixed;
   z-index: 1000;
