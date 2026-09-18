@@ -18,10 +18,10 @@ const navItems: NavItem[] = [
     icon: <RmtIcon />,
     subItems: [
       { label: 'Tasks', href: '/rmt/tasks' },
-      { label: 'Plan', href: '/rmt/plan' },
       { label: 'Availability', href: '/rmt/availability' },
       { label: 'Deployment', href: '/rmt/deployment' },
-      { label: 'Plan vs actual', href: '/rmt/delivery' },
+      // A project's plan lives under this one, at /rmt/projects/[prjc], so it needs no entry.
+      { label: 'Projects', href: '/rmt/projects' },
     ],
   },
 ];

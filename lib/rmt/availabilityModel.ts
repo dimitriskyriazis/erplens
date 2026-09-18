@@ -1,14 +1,25 @@
 /**
  * Pure helpers for the availability screen: week arithmetic on 'yyyy-MM-dd' strings, the
- * capacity check behind "Fits?", and the colour level of a heat cell. No React, no fetch,
+ * free-days summary per window, and the colour level of a heat cell. No React, no fetch,
  * so the page component (server) and the client components share them.
  */
-import type { AvailabilityBooking, AvailabilityResource, AvailabilityWeek } from './availabilityQueries';
+import type { AvailabilityBooking, AvailabilityDay, AvailabilityResource, AvailabilityWeek } from './availabilityQueries';
+import { granFor } from './timeScale';
 
-/** Weeks the heatmap always shows; the assign table looks at the first 2, 4 or 8 of them. */
-export const HEATMAP_WEEKS = 14;
-export const WINDOW_OPTIONS = [2, 4, 8] as const;
-export const NEED_OPTIONS = [1, 2, 3, 5] as const;
+export { spanLabel } from './timeScale';
+
+/** The spans the table offers, in weeks: the same set, in the same words, as the board. */
+export const SPAN_OPTIONS = [1, 2, 4, 8, 13, 26] as const;
+/** Past this many weeks the strip cells go narrow, so half a year still fits a screen. */
+export const TIGHT_FROM = 13;
+/**
+ * The strip steps by day over a span of one or two weeks and by week beyond it, by the same
+ * rule the deployment board uses, because "3.5 free days next week" hides which days they
+ * are. Only those first two weeks come back day by day.
+ */
+export const isDaySpan = (weeks: number): boolean => granFor(weeks) === 'day';
+/** Monday to Friday, so a span of whole weeks is five cells each. */
+export const DAYS_PER_WEEK = 5;
 /** UTBL01 codes for SODTYPE 25, with the labels the screen uses instead of the Greek names. */
 export const TYPE_OPTIONS = [
   { code: '', label: 'All' },
@@ -57,14 +68,33 @@ export const fmtDays = (n: number): string => {
   return Number.isInteger(r) ? String(r) : r.toFixed(1);
 };
 
+/** Only meaningful for a named person: a pool placeholder has no one week to exceed. */
 export const isOverbooked = (w: AvailabilityWeek): boolean => w.booked > w.workDays + 0.01;
 
-/** Ramp step for a number of days out of the week: 0 for nothing, 1..HEAT_LEVELS by share. */
-export function levelOf(days: number, workDays: number): number {
+/** Ramp step for a number of days out of `full`: 0 for nothing, 1..HEAT_LEVELS by share. */
+export function levelOf(days: number, full: number): number {
   if (days <= 0.005) return 0;
-  const share = days / Math.max(1, workDays);
+  const share = days / Math.max(1, full);
   return Math.min(HEAT_LEVELS, Math.max(1, Math.ceil(share * HEAT_LEVELS - 1e-9)));
 }
+
+/**
+ * A generic placeholder stands for a whole pool, so its week is not one person's 5 days:
+ * 10.8 person-days of commissioning demand is roughly two people, out of the 60 who carry
+ * the specialty. These two helpers keep placeholder rows off the person scale.
+ */
+export const peopleNeeded = (w: AvailabilityWeek): number => w.booked / Math.max(1, w.workDays);
+
+/**
+ * The busiest generic cell inside the span: the top of the ramp placeholder rows are shaded
+ * against. Taken over what is on screen, so narrowing the span rescales the placeholder rows
+ * with it rather than flattening them against a peak nobody can see.
+ */
+export const demandPeak = (resources: AvailabilityResource[], weeks: number): number =>
+  resources.reduce((peak, r) => (r.generic ? r.weeks.slice(0, weeks).reduce((m, w) => Math.max(m, w.booked), peak) : peak), 0);
+
+export const demandPeakDays = (resources: AvailabilityResource[], days: number): number =>
+  resources.reduce((peak, r) => (r.generic ? r.days.slice(0, days).reduce((m, d) => Math.max(m, d.booked), peak) : peak), 0);
 
 /**
  * Colour class of a heat cell: 0 = nothing on this side (no room, or nothing booked),
@@ -78,23 +108,59 @@ export function heatLevel(w: AvailabilityWeek, mode: HeatMode): number | 'over' 
 /** The assign table's cell: free days still ahead, red when the week is overbooked. */
 export const aheadLevel = (w: AvailabilityWeek): number | 'over' => (isOverbooked(w) ? 'over' : levelOf(w.freeAhead, w.workDays));
 
-export type WindowStats = {
-  /** Free days still ahead over the window (days already past do not count). */
+/** The same for one day, in either mode: out of the single day, red when double-booked. */
+export const dayLevel = (d: AvailabilityDay, mode: HeatMode): number | 'over' =>
+  d.booked > 1.01 ? 'over' : levelOf(mode === 'free' ? d.freeAhead : d.booked, 1);
+
+export type SpanStats = {
+  /** Free days still ahead over the span (days already past do not count). */
   free: number;
+  /** Person-days booked over the span, uncapped. */
+  booked: number;
   nextFree: string | null;
-  /** Days missing against the need, 0 when it fits. */
-  short: number;
-  fits: boolean;
 };
 
-/** Capacity of one resource over the first `weeks` weeks against `need` days, from today on. */
-export function windowStats(r: AvailabilityResource, weeks: number, need: number): WindowStats {
+/** Room left and work booked on one resource over the first `weeks` weeks, from today on. */
+export function spanStats(r: AvailabilityResource, weeks: number): SpanStats {
   const slice = r.weeks.slice(0, weeks);
-  const free = slice.reduce((s, w) => s + w.freeAhead, 0);
-  const nextFree = slice.find((w) => w.firstFree)?.firstFree ?? null;
-  const short = Math.max(0, Math.round((need - free) * 10) / 10);
-  return { free, nextFree, short, fits: short <= 0 };
+  return {
+    free: slice.reduce((s, w) => s + w.freeAhead, 0),
+    booked: slice.reduce((s, w) => s + w.booked, 0),
+    nextFree: slice.find((w) => w.firstFree)?.firstFree ?? null,
+  };
 }
+
+/**
+ * The two sides of the assignment decision over the window: room left on the named people in
+ * view, and the person-days still sitting on the placeholders waiting to be given to someone.
+ *
+ * Deliberately not netted off. Pool demand has not been assigned to anybody, so taking it out
+ * of a person's free days would mean inventing a split across everyone who carries the
+ * specialty. Side by side the pair still answers the question the screen is for: whether the
+ * capacity on show can absorb what is coming.
+ */
+export type CoverStats = { free: number; demand: number; people: number; pools: number };
+
+export function coverStats(resources: AvailabilityResource[], weeks: number): CoverStats {
+  const cover: CoverStats = { free: 0, demand: 0, people: 0, pools: 0 };
+  for (const r of resources) {
+    if (r.generic) {
+      cover.pools += 1;
+      cover.demand += r.weeks.slice(0, weeks).reduce((s, w) => s + w.booked, 0);
+    } else {
+      cover.people += 1;
+      cover.free += r.weeks.slice(0, weeks).reduce((s, w) => s + w.freeAhead, 0);
+    }
+  }
+  return cover;
+}
+
+/**
+ * Unassigned person-days per person carrying the specialty. This is the number that ranks
+ * pools against each other: 426 days across 76 electricians is a quieter pool than 164 days
+ * across 10 designers, though the raw total says the opposite.
+ */
+export const perHead = (demand: number, pool: number): number | null => (pool > 0 ? demand / pool : null);
 
 /** The week's Monday for each column, from the window start. */
 export const weekStarts = (start: string, weeks: number): string[] => Array.from({ length: weeks }, (_, i) => addDays(start, i * 7));
@@ -114,6 +180,11 @@ export function groupBookings(bookings: AvailabilityBooking[]): Map<number, Avai
 export function bookingsInWeek(all: AvailabilityBooking[], weekStart: string): AvailabilityBooking[] {
   const end = addDays(weekStart, 7);
   return all.filter((b) => b.from.slice(0, 10) < end && b.to.slice(0, 10) >= weekStart);
+}
+
+/** Bookings covering one day. */
+export function bookingsOnDay(all: AvailabilityBooking[], date: string): AvailabilityBooking[] {
+  return all.filter((b) => b.from.slice(0, 10) <= date && b.to.slice(0, 10) >= date);
 }
 
 export const typeLabel = (code: string | null, name: string | null): string =>

@@ -1,7 +1,9 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import PageHeader from '@/app/components/PageHeader';
 import ProjectPicker, { fmtDbDate } from '@/app/rmt/components/ProjectPicker';
 import { useProjectTimeline } from '@/app/rmt/components/useProjectTimeline';
@@ -19,8 +21,18 @@ type Props = {
   initialPrjc: number | null;
 };
 
+/**
+ * One project's plan: the detail page under the projects table. The project is the path, so
+ * choosing another one in the picker (or falling back to the latest after a company change)
+ * is a navigation rather than a state change, and the address always names what is drawn.
+ */
 export default function RmtPlanClient({ companies, initialCompany, initialPrjc }: Props) {
+  const router = useRouter();
   const { company, setCompany, prjc, setPrjc, data, loading, error, loadedAt } = useProjectTimeline(initialCompany, initialPrjc);
+
+  useEffect(() => {
+    if (prjc && prjc !== initialPrjc) router.replace(`/rmt/projects/${prjc}?company=${company}`);
+  }, [prjc, initialPrjc, company, router]);
 
   const summary = useMemo(() => {
     if (!data?.project) return null;
@@ -52,7 +64,14 @@ export default function RmtPlanClient({ companies, initialCompany, initialPrjc }
     <main className="page">
       <PageHeader
         title="RMT Plan"
-        leftActions={<ProjectPicker company={company} selectedPrjc={prjc} placeholder={projectLabel} onChoose={(hit) => setPrjc(hit.prjc)} />}
+        leftActions={
+          <>
+            <Link href={`/rmt/projects?company=${company}`} className="header-back" title="Back to the projects table">
+              ‹ Projects
+            </Link>
+            <ProjectPicker company={company} selectedPrjc={prjc} placeholder={projectLabel} onChoose={(hit) => setPrjc(hit.prjc)} />
+          </>
+        }
         rightActions={
           <label className="header-label">
             <span>Company</span>

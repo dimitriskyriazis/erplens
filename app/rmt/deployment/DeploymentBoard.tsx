@@ -14,8 +14,6 @@ type Props = {
   onColourBy: (by: ColourBy) => void;
   rollColumn: number;
   onRollColumn: (i: number) => void;
-  hideIdle: boolean;
-  onHideIdle: (hide: boolean) => void;
   loading: boolean;
 };
 
@@ -24,22 +22,10 @@ type Props = {
  * saying where they are and the code saying which project. Colour never carries a value
  * alone — every booked cell prints its project code and location code, and the legend names
  * each swatch — which is what lets a five-hue destination palette sit inside a dense grid.
+ * Everyone in scope gets a row, booked or not, so the board is the full bench rather than
+ * a list of the busy.
  */
-export default function DeploymentBoard({
-  teams,
-  columns,
-  totals,
-  legend,
-  gran,
-  unit,
-  colourBy,
-  onColourBy,
-  rollColumn,
-  onRollColumn,
-  hideIdle,
-  onHideIdle,
-  loading,
-}: Props) {
+export default function DeploymentBoard({ teams, columns, totals, legend, gran, unit, colourBy, onColourBy, rollColumn, onRollColumn, loading }: Props) {
   const people = teams.reduce((n, t) => n + t.rows.length, 0);
   // The grid is sized from the column count so a 4-week and a 26-week board both fit.
   const gridStyle = { '--dep-cols': columns.length } as React.CSSProperties;
@@ -198,15 +184,6 @@ export default function DeploymentBoard({
         ))}
       </div>
 
-      <div className="avail-foot">
-        <span>
-          Grey is at base, Athens or the workshop; colour is a trip. {colourBy === 'project' && 'Projects past the fifth share one grey — the code in the cell still names them.'}
-        </span>
-        <label className="avail-check">
-          <input type="checkbox" checked={hideIdle} onChange={(e) => onHideIdle(e.target.checked)} />
-          Hide people with nothing booked
-        </label>
-      </div>
     </>
   );
 }

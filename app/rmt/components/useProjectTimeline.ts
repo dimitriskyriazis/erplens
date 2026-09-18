@@ -10,8 +10,10 @@ type ProjectsResponse = { ok: true; projects: RmtProjectHit[] } | { ok: false; e
 type Loaded = { key: string; data: ProjectTimeline | null; error: string | null; at: number };
 
 /**
- * Company and project selection for an RMT screen, kept in the URL, plus the project's
- * timeline data. With no project in the URL it picks the one whose plan ends latest.
+ * Company and project selection for an RMT screen, plus the project's timeline data. The
+ * project itself lives in the path (/rmt/projects/[prjc]), so only the company is written to
+ * the query string here; picking another project is a navigation the screen performs. With
+ * no project at all it falls back to the one whose plan ends latest.
  */
 export function useProjectTimeline(initialCompany: number, initialPrjc: number | null) {
   const [company, setCompanyState] = useState(initialCompany);
@@ -25,11 +27,8 @@ export function useProjectTimeline(initialCompany: number, initialPrjc: number |
   const error = loaded?.key === requestKey ? loaded.error : pickError;
 
   useEffect(() => {
-    const params = new URLSearchParams();
-    params.set('company', String(company));
-    if (prjc) params.set('prjc', String(prjc));
-    window.history.replaceState(null, '', `?${params.toString()}`);
-  }, [company, prjc]);
+    window.history.replaceState(null, '', `?company=${company}`);
+  }, [company]);
 
   useEffect(() => {
     if (prjc) return;

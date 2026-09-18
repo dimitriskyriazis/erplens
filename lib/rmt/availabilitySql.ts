@@ -6,15 +6,20 @@
  * Parameters: @company, @start (yyyy-MM-dd, a Monday), @days (weeks * 7), @team (RSRCTYPE,
  * 0 = all), @type (UTBL01 code for SODTYPE 25, '' = all), @spec (CCCCLRMTEIDIKOTITA, 0 = all),
  * @history (1 = only people with a booking in the 365 days before the window or inside it).
+ *
+ * Result sets, in order: weeks, days (first two weeks), bookings, teams, specialties, types,
+ * the active resource count.
  */
 
 /**
  * Window and resource scope, shared by the per-week statement and the bookings statement
  * (a CTE only lives for one statement, and the read-only guard rules out temp tables).
  *
- * bk holds every booking line that touches the window and belongs to a resource in scope.
- * Named people count their planned lines only (CCCCLRMTESTIMATE = 0); a generic placeholder
- * counts every line on it, since anything booked on a generic is demand.
+ * bk holds every booking line that touches the window and belongs to a resource in scope,
+ * including the estimate lines sitting on named people, which `counted` then keeps out of
+ * the day arithmetic. They still come back with the bookings so the hover card can show
+ * them: not counting a line is a judgement the screen should be able to display, not hide.
+ * A generic placeholder counts every line on it, since anything booked on a generic is demand.
  *
  * frac is the share of one working day a line takes. A named person is taken for the whole
  * day by a multi-day booking and for hours / 8 by a same-day one. A generic estimate says
@@ -32,11 +37,18 @@ res AS (
     FROM dbo.RSRC r CROSS JOIN p
     WHERE r.COMPANY = @company
       AND r.ISACTIVE = 1
-      AND (@team = 0 OR r.RSRCTYPE = @team)
-      AND (@type = '' OR EXISTS (SELECT 1 FROM dbo.UTBL01 u
+      -- A placeholder belongs to no team (RSRCTYPE is null on all of them), so without this
+      -- exemption picking any team would drop every generic row and the unassigned demand
+      -- would silently leave the screen. It rides through the team filter the way it rides
+      -- through the type one below.
+      AND (@team = 0 OR ISNULL(r.CCCCLISGENERIC, 0) = 1 OR r.RSRCTYPE = @team)
+      -- Internal and External are employer categories for people. A placeholder is neither,
+      -- it is the demand those people will absorb, so it rides through the type filter and
+      -- is only isolated by asking for @type = 'Gen' outright.
+      AND (@type = '' OR ISNULL(r.CCCCLISGENERIC, 0) = 1 OR EXISTS (SELECT 1 FROM dbo.UTBL01 u
                                  WHERE u.COMPANY = r.COMPANY AND u.SODTYPE = r.SODTYPE AND u.UTBL01 = r.UTBL01 AND u.CODE = @type))
       AND (@spec = 0 OR EXISTS (SELECT 1 FROM dbo.CCCCLRSRCEIDIKOTITA rs WHERE rs.RSRC = r.RSRC AND rs.CCCCLEIDIKOTITA = @spec))
-      AND (@history = 0 OR EXISTS (SELECT 1 FROM dbo.PRJLINES h
+      AND (@history = 0 OR ISNULL(r.CCCCLISGENERIC, 0) = 1 OR EXISTS (SELECT 1 FROM dbo.PRJLINES h
                                    WHERE h.SOPLTYPE = 12 AND h.RSRC = r.RSRC
                                      AND h.finaldate >= DATEADD(day, -365, p.start_date) AND h.fromdate < p.end_date))
 ),
@@ -45,12 +57,16 @@ bk AS (
            a.CCCCLRMTREMARKS, a.CCCCLNUMBEROFRSRC,
            ISNULL(a.CCCCLISTRAVEL, 0)    AS CCCCLISTRAVEL,
            ISNULL(a.CCCCLRMTESTIMATE, 0) AS CCCCLRMTESTIMATE,
+           -- 0 on an estimate line sitting on a named person: a guess typed against someone
+           -- is not work they owe, and such a line is often superseded by the planned line
+           -- made from it, so counting both would book the same work twice.
+           CASE WHEN res.generic = 0 AND ISNULL(a.CCCCLRMTESTIMATE, 0) = 1 THEN 0 ELSE 1 END AS counted,
            dd.d0, dd.d1,
            CASE WHEN res.generic = 1 AND a.CCCCLNUMBEROFRSRC IS NOT NULL
                 THEN a.CCCCLNUMBEROFRSRC / NULLIF(s.span_work_days, 0)
                 ELSE s.day_frac END AS frac
     FROM dbo.PRJLINES a
-    JOIN res ON res.RSRC = a.RSRC AND (res.generic = 1 OR ISNULL(a.CCCCLRMTESTIMATE, 0) = 0)
+    JOIN res ON res.RSRC = a.RSRC
     CROSS JOIN p
     CROSS APPLY (SELECT CAST(a.fromdate AS date) AS d0, CAST(a.finaldate AS date) AS d1) AS dd
     -- n: calendar days in the span, inclusive. w0: weekday of its first day, 0 = Monday
@@ -85,11 +101,11 @@ days AS (
     WHERE (DATEDIFF(day, '19000101', DATEADD(day, n.i, p.start_date)) % 7) < 5
 ),
 cell AS (
-    -- demand: everything booked on the day, uncapped, so two full bookings read as 2.
+    -- demand: everything counted on the day, uncapped, so two full bookings read as 2.
     -- booked: the share of the day actually taken, never more than 1.
     SELECT res.RSRC, days.d, days.wk,
-           ISNULL(SUM(bk.frac), 0) AS demand,
-           CASE WHEN ISNULL(SUM(bk.frac), 0) > 1 THEN 1 ELSE ISNULL(SUM(bk.frac), 0) END AS booked
+           ISNULL(SUM(bk.frac * bk.counted), 0) AS demand,
+           CASE WHEN ISNULL(SUM(bk.frac * bk.counted), 0) > 1 THEN 1 ELSE ISNULL(SUM(bk.frac * bk.counted), 0) END AS booked
     FROM res CROSS JOIN days
     LEFT JOIN bk ON bk.RSRC = res.RSRC AND days.d BETWEEN bk.d0 AND bk.d1
     GROUP BY res.RSRC, days.d, days.wk
@@ -110,6 +126,16 @@ SELECT res.RSRC, res.NAME, res.CODE1, res.generic,
        (SELECT STRING_AGG(e.NAME, ', ') WITHIN GROUP (ORDER BY e.CCCCLRMTEIDIKOTITA)
         FROM dbo.CCCCLRSRCEIDIKOTITA rs JOIN dbo.CCCCLRMTEIDIKOTITA e ON e.CCCCLRMTEIDIKOTITA = rs.CCCCLEIDIKOTITA
         WHERE rs.RSRC = res.RSRC) AS specialties,
+       -- Named people who could take a generic's work: active, not generic, sharing one of its
+       -- specialties. Deliberately outside the screen's filters, so the pool a placeholder
+       -- stands for does not change when the view is narrowed.
+       CASE WHEN res.generic = 1 THEN
+         (SELECT COUNT(*) FROM dbo.RSRC pr
+          WHERE pr.COMPANY = res.COMPANY AND pr.ISACTIVE = 1 AND ISNULL(pr.CCCCLISGENERIC, 0) = 0
+            AND EXISTS (SELECT 1 FROM dbo.CCCCLRSRCEIDIKOTITA prs
+                        JOIN dbo.CCCCLRSRCEIDIKOTITA grs ON grs.CCCCLEIDIKOTITA = prs.CCCCLEIDIKOTITA
+                        WHERE prs.RSRC = pr.RSRC AND grs.RSRC = res.RSRC))
+       ELSE 0 END AS pool,
        pw.wk, DATEADD(day, pw.wk * 7, p.start_date) AS week_start,
        pw.work_days, pw.free_days, pw.free_ahead, pw.booked_days, pw.first_free
 FROM res CROSS JOIN p
@@ -117,6 +143,26 @@ LEFT JOIN dbo.RSRCTYPE rt ON rt.COMPANY = res.COMPANY AND rt.RSRCTYPE = res.RSRC
 LEFT JOIN dbo.UTBL01   u  ON u.COMPANY = res.COMPANY AND u.SODTYPE = res.SODTYPE AND u.UTBL01 = res.UTBL01
 JOIN perweek pw ON pw.RSRC = res.RSRC
 ORDER BY res.NAME, res.RSRC, pw.wk;
+${SCOPE},
+-- Day detail for the first two weeks only: the assign table shows a cell per day for a one
+-- or two week window, and nothing else needs it, so the rest of the window stays weekly.
+dn AS (
+    SELECT TOP (CASE WHEN @days < 14 THEN @days ELSE 14 END)
+           ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) - 1 AS i FROM sys.all_objects
+),
+dd AS (
+    SELECT DATEADD(day, dn.i, p.start_date) AS d
+    FROM dn CROSS JOIN p
+    WHERE (DATEDIFF(day, '19000101', DATEADD(day, dn.i, p.start_date)) % 7) < 5
+)
+SELECT res.RSRC, dd.d,
+       ISNULL(SUM(bk.frac * bk.counted), 0) AS demand,
+       CASE WHEN ISNULL(SUM(bk.frac * bk.counted), 0) > 1 THEN 1 ELSE ISNULL(SUM(bk.frac * bk.counted), 0) END AS booked,
+       CASE WHEN dd.d >= CAST(GETDATE() AS date) THEN 1 ELSE 0 END AS ahead
+FROM res CROSS JOIN dd
+LEFT JOIN bk ON bk.RSRC = res.RSRC AND dd.d BETWEEN bk.d0 AND bk.d1
+GROUP BY res.RSRC, dd.d
+ORDER BY res.RSRC, dd.d;
 ${SCOPE}
 SELECT bk.RSRC, bk.CCCID, bk.fromdate, bk.finaldate, bk.CCCCLISTRAVEL, bk.CCCCLRMTESTIMATE,
        bk.CCCCLNUMBEROFRSRC, bk.CCCCLRMTREMARKS,

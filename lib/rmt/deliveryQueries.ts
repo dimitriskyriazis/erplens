@@ -1,17 +1,20 @@
 import { readQuerySets } from '@/lib/sql';
-import { formatDbDateTime } from '@/lib/dbDates';
+import { formatDbDate, formatDbDateTime } from '@/lib/dbDates';
 import { DELIVERY_SQL } from './deliverySql';
 
 /**
- * Estimates against logged work: what was scheduled for named people on a task (person-days
- * at 8 hours) against what they actually logged in the RMT portal.
+ * Three figures per project and per task, all in hours at 8 hours a person-day:
  *
- * Generic estimate lines are deliberately out of scope. They say "N person-days of an
- * installer somewhere in this span" and nobody logs against them, so including them would
- * make every project look permanently under plan.
+ *  - estimate: person-days written on estimate lines, normally against a generic placeholder,
+ *    before anyone was picked. An intention, not a schedule.
+ *  - planned: person-days of the named bookings under the task. What went in a calendar.
+ *  - done: hours logged in the RMT portal.
  *
- * Delta is logged minus planned hours. A project still running reads negative until the work
- * is done, which is why the screen shows the task dates beside it.
+ * They are three different acts, not three versions of one number, and each can be missing:
+ * plenty of work is booked without an estimate, and a task can absorb logged hours far beyond
+ * either figure because a booking is a day in a calendar, not a budget. The screen shows the
+ * three side by side and leaves the reading to the person, rather than declaring an overrun
+ * against whichever of them happens to exist.
  */
 
 export type DeliveryTask = {
@@ -21,6 +24,7 @@ export type DeliveryTask = {
   name: string;
   start: string | null;
   end: string | null;
+  estimateHours: number;
   plannedHours: number;
   loggedHours: number;
 };
@@ -30,29 +34,19 @@ export type DeliveryProject = {
   code: string;
   name: string;
   tasks: number;
+  estimateHours: number;
   plannedHours: number;
   loggedHours: number;
-};
-
-/** Tasks bucketed by logged hours as a share of planned hours. */
-export type DeliveryBucket = { bucket: number; label: string; tasks: number; over: boolean };
-
-export type DeliveryAttention = {
-  id: number;
-  name: string;
-  projectCode: string;
-  end: string | null;
-  plannedHours: number;
-  loggedHours: number;
-  /** Why it is here: past its plan, or past its end date with nothing logged. */
-  reason: 'over' | 'stalled';
+  /** Last day anything was logged on the project, 'yyyy-MM-dd'. */
+  lastLogged: string | null;
 };
 
 export type DeliveryTotals = {
   tasksWithWork: number;
+  tasksWithEstimate: number;
+  estimateHours: number;
   plannedHours: number;
   loggedHours: number;
-  over120: number;
   orphanActions: number;
   orphanHours: number;
 };
@@ -60,14 +54,8 @@ export type DeliveryTotals = {
 export type Delivery = {
   projects: DeliveryProject[];
   tasks: DeliveryTask[];
-  buckets: DeliveryBucket[];
-  attention: DeliveryAttention[];
   totals: DeliveryTotals;
 };
-
-const BUCKET_LABELS = ['under 60%', '60–90%', '90–110%', '110–120%', '120–150%', 'over 150%'];
-/** Past 120% of plan a task is either an underestimate or late scope, so it reads as a problem. */
-const OVER_FROM = 4;
 
 const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -78,11 +66,8 @@ export async function getDelivery(company: number, limit = 40): Promise<Delivery
     { key: 'limit', value: Math.max(1, Math.min(200, limit)) },
   ]);
 
-  const counts = new Map<number, number>();
-  (sets[2] ?? []).forEach((r) => counts.set(num(r.bucket), num(r.tasks)));
-
-  const totals = sets[4]?.[0] ?? {};
-  const orphan = sets[5]?.[0] ?? {};
+  const totals = sets[2]?.[0] ?? {};
+  const orphan = sets[3]?.[0] ?? {};
 
   return {
     projects: (sets[0] ?? []).map((r) => ({
@@ -90,8 +75,10 @@ export async function getDelivery(company: number, limit = 40): Promise<Delivery
       code: String(r.CODE ?? '').trim(),
       name: String(r.NAME ?? '').trim(),
       tasks: num(r.tasks),
+      estimateHours: round1(num(r.est_hours)),
       plannedHours: round1(num(r.planned_hours)),
       loggedHours: round1(num(r.logged_hours)),
+      lastLogged: formatDbDate(r.last_logged),
     })),
     tasks: (sets[1] ?? []).map((r) => ({
       prjc: Number(r.PRJC),
@@ -99,33 +86,16 @@ export async function getDelivery(company: number, limit = 40): Promise<Delivery
       name: String(r.NAME ?? '').trim(),
       start: formatDbDateTime(r.fromdate),
       end: formatDbDateTime(r.finaldate),
+      estimateHours: round1(num(r.est_hours)),
       plannedHours: round1(num(r.planned_hours)),
       loggedHours: round1(num(r.logged_hours)),
     })),
-    buckets: BUCKET_LABELS.map((label, bucket) => ({
-      bucket,
-      label,
-      tasks: counts.get(bucket) ?? 0,
-      over: bucket >= OVER_FROM,
-    })),
-    attention: (sets[3] ?? []).map((r) => {
-      const plannedHours = round1(num(r.planned_hours));
-      const loggedHours = round1(num(r.logged_hours));
-      return {
-        id: Number(r.CCCID),
-        name: String(r.NAME ?? '').trim(),
-        projectCode: String(r.project_code ?? '').trim(),
-        end: formatDbDateTime(r.finaldate),
-        plannedHours,
-        loggedHours,
-        reason: loggedHours === 0 ? ('stalled' as const) : ('over' as const),
-      };
-    }),
     totals: {
       tasksWithWork: num(totals.tasks_with_work),
+      tasksWithEstimate: num(totals.tasks_with_estimate),
+      estimateHours: round1(num(totals.est_hours)),
       plannedHours: round1(num(totals.planned_hours)),
       loggedHours: round1(num(totals.logged_hours)),
-      over120: num(totals.over_120),
       orphanActions: num(orphan.orphan_actions),
       orphanHours: round1(num(orphan.orphan_hours)),
     },

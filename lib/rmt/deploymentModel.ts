@@ -16,40 +16,16 @@
  */
 import type { DeploymentCell, DeploymentResource } from './deploymentQueries';
 import { addDays, fmtLong, parseIso } from './availabilityModel';
+import type { Granularity } from './timeScale';
 
+/** Span and step mean the same on every RMT screen, so they live in one place. */
+export { DAILY_UP_TO, WEEKLY_UP_TO, granFor, spanLabel, unitCount, unitOf, type Granularity, type Unit } from './timeScale';
+
+/** The spans the board offers, from a working week to half a year. */
 export const SPAN_OPTIONS = [1, 2, 4, 8, 13, 26] as const;
 export type Span = (typeof SPAN_OPTIONS)[number];
-/** Longest span the board can draw one column per working day: 5 or 10 columns. */
-export const DAILY_UP_TO = 2;
-/** Longest span still readable one column per week; past it the board steps by month. */
-export const WEEKLY_UP_TO = 13;
-/** Shortest span worth stepping by month; below it a month column is the whole board. */
-export const MONTHLY_FROM = 4;
 
-export type Granularity = 'day' | 'week' | 'month';
 export type ColourBy = 'place' | 'project';
-
-/** Whether a step can be drawn at all for a span. */
-export const granAllowed = (gran: Granularity, span: number): boolean =>
-  gran === 'day' ? span <= DAILY_UP_TO : gran === 'week' ? span <= WEEKLY_UP_TO : span >= MONTHLY_FROM;
-
-/**
- * The step a span opens on: a week or two is worth seeing day by day, a quarter is not
- * readable that way, and half a year only works stepped by month.
- */
-export const granFor = (span: number): Granularity => (span <= DAILY_UP_TO ? 'day' : span <= WEEKLY_UP_TO ? 'week' : 'month');
-
-/**
- * What one column unit is worth, so the panels can say "person-days" on a day board and
- * "person-weeks" on a week or month one. A month column is several week slots, so the unit
- * there is still the week.
- */
-export type Unit = { one: string; short: string; long: string };
-export const unitOf = (gran: Granularity): Unit =>
-  gran === 'day' ? { one: 'day', short: 'd', long: 'person-days' } : { one: 'week', short: 'w', long: 'person-weeks' };
-
-/** "3 days", "1 week". */
-export const unitCount = (n: number, unit: Unit): string => `${n} ${unit.one}${n === 1 ? '' : 's'}`;
 
 export type Swatch = { fill: string; ink: string; /** The 'nothing booked' swatch: drawn as a dashed outline, not a fill. */ empty?: true };
 
@@ -408,8 +384,7 @@ const splitSpecialties = (v: string | null): string[] => {
  *
  * Someone holding two specialties counts in both rows, because both skills are equally
  * unavailable while that person is out — so the rows deliberately add up to more than the
- * board. Capacity is the whole bench, idle people included, which is why this reads the
- * unfiltered board rather than the one the "hide idle" checkbox has thinned.
+ * board. Capacity is the whole bench, idle people included, which the board now is.
  */
 export function specialtyLoad(teams: BoardTeam[], columns: BoardColumn[], by: ColourBy, projects: Map<string, Swatch>): SpecialtyRow[] {
   const units = columns.reduce((n, c) => n + c.slots.length, 0);

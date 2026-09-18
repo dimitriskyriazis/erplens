@@ -8,9 +8,9 @@ type Props = { rows: SpecialtyRow[]; unit: Unit; colourByPlace: boolean };
 const pct = (n: number, of: number) => (of ? Math.round((n / of) * 100) : 0);
 
 /**
- * Deployment per specialty: how much of each skill's bench is booked over the window.
+ * Deployment per specialty: how much of each skill's bench is booked over the span.
  *
- * Each bar is that specialty's own capacity (its people × the window), so the bars read as
+ * Each bar is that specialty's own capacity (its people × the span), so the bars read as
  * utilisation and a ten-person skill is comparable with a hundred-person one. The fill keeps
  * the colours of the board above, so the bar also says where that skill goes; the grey tail
  * is the idle part of the bench. Length is never the only carrier — every row prints its
@@ -25,7 +25,7 @@ export default function SpecialtyLoad({ rows, unit, colourByPlace }: Props) {
         <div>
           <h2>Deployment by specialty</h2>
           <p className="avail-sub">
-            How much of each skill&apos;s bench is booked over the window, split by {colourByPlace ? 'destination' : 'project'}.
+            How much of each skill&apos;s bench is booked over the span, split by {colourByPlace ? 'destination' : 'project'}.
           </p>
         </div>
       </div>

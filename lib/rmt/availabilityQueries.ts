@@ -10,10 +10,16 @@ import { AVAILABILITY_SQL } from './availabilitySql';
  * booked share of each Monday to Friday. The uncapped sum is returned as well, so a week
  * whose demand exceeds its working days can be flagged as overbooked.
  *
- * Named people count their planned lines (CCCCLRMTESTIMATE = 0). Generic placeholders
+ * Named people count their planned lines (CCCCLRMTESTIMATE = 0). An estimate line typed
+ * against a person still comes back among the bookings, flagged, so the screen can show it
+ * without letting it eat days: it is a guess, and it is often superseded by the planned line
+ * made from it. Generic placeholders
  * (RSRC.CCCCLISGENERIC = 1) are included and flagged: their lines are estimates, so their
- * "booked" days are demand, not capacity. Inactive resources are excluded because they
- * cannot be assigned. The bookings behind every cell come back in a second result set.
+ * "booked" days are demand on a whole pool of people, not one person's capacity. `pool`
+ * says how many named people share the placeholder's specialty. Inactive resources are
+ * excluded because they cannot be assigned. The same days come back once more one by one
+ * for the first two weeks, which is all the assign table's day strip needs, and the
+ * bookings behind every cell come back after that.
  *
  * Column names follow the database. Like tasksRelation.ts and timelineQueries.ts, the
  * resource and booking sources are read from the base tables directly in availabilitySql.ts
@@ -50,6 +56,18 @@ export type AvailabilityWeek = {
   firstFree: string | null;
 };
 
+/** One Monday-to-Friday day, for the short windows the assign table shows day by day. */
+export type AvailabilityDay = {
+  /** 'yyyy-MM-dd'. */
+  date: string;
+  /** Room left on the day, 0 to 1, after overlapping bookings are capped at one day. */
+  free: number;
+  /** `free` on today or later, 0 on a day already past: what can still be assigned. */
+  freeAhead: number;
+  /** Person-days demanded on the day, uncapped. Above 1 means double-booked. */
+  booked: number;
+};
+
 export type AvailabilityResource = {
   rsrc: number;
   name: string;
@@ -57,11 +75,15 @@ export type AvailabilityResource = {
   team: string | null;
   type: string | null;
   typeCode: string | null;
-  /** A placeholder such as "_Installer Generic": demand, not a person. */
+  /** A placeholder such as "_Installer Generic": demand on a whole pool, not a person. */
   generic: boolean;
+  /** Named people sharing a generic's specialty: the pool it stands for. 0 on a person. */
+  pool: number;
   /** Specialty names, comma separated, in lookup order. */
   specialties: string | null;
   weeks: AvailabilityWeek[];
+  /** The first two weeks, day by day. Empty beyond that: nothing on screen needs it. */
+  days: AvailabilityDay[];
 };
 
 export type AvailabilityBooking = {
@@ -128,8 +150,10 @@ export async function getAvailability(f: AvailabilityFilters): Promise<Availabil
         type: str(r.UTBL01_NAME),
         typeCode: str(r.UTBL01_CODE),
         generic: Number(r.generic) === 1,
+        pool: num(r.pool),
         specialties: str(r.specialties),
         weeks: [],
+        days: [],
       };
       byRsrc.set(rsrc, entry);
     }
@@ -143,11 +167,23 @@ export async function getAvailability(f: AvailabilityFilters): Promise<Availabil
     });
   }
 
+  for (const r of sets[1] ?? []) {
+    const entry = byRsrc.get(Number(r.RSRC));
+    if (!entry) continue;
+    const booked = round2(num(r.booked));
+    entry.days.push({
+      date: formatDbDate(r.d) ?? '',
+      free: round2(1 - booked),
+      freeAhead: Number(r.ahead) === 1 ? round2(1 - booked) : 0,
+      booked: round2(num(r.demand)),
+    });
+  }
+
   return {
     start: f.start,
     weeks: f.weeks,
     resources: Array.from(byRsrc.values()),
-    bookings: (sets[1] ?? []).map((r) => ({
+    bookings: (sets[2] ?? []).map((r) => ({
       rsrc: Number(r.RSRC),
       id: Number(r.CCCID),
       from: formatDbDateTime(r.fromdate) ?? '',
@@ -160,11 +196,11 @@ export async function getAvailability(f: AvailabilityFilters): Promise<Availabil
       estimate: Number(r.CCCCLRMTESTIMATE) === 1,
       personDays: numOrNull(r.CCCCLNUMBEROFRSRC),
     })),
-    totalResources: num(sets[5]?.[0]?.total),
+    totalResources: num(sets[6]?.[0]?.total),
     options: {
-      teams: (sets[2] ?? []).map((r) => ({ id: Number(r.RSRCTYPE), code: String(r.CODE ?? ''), name: String(r.NAME ?? '') })),
-      specialties: (sets[3] ?? []).map((r) => ({ id: Number(r.CCCCLRMTEIDIKOTITA), code: String(r.CODE ?? ''), name: String(r.NAME ?? '') })),
-      types: (sets[4] ?? []).map((r) => ({ code: String(r.CODE ?? ''), name: String(r.NAME ?? '') })),
+      teams: (sets[3] ?? []).map((r) => ({ id: Number(r.RSRCTYPE), code: String(r.CODE ?? ''), name: String(r.NAME ?? '') })),
+      specialties: (sets[4] ?? []).map((r) => ({ id: Number(r.CCCCLRMTEIDIKOTITA), code: String(r.CODE ?? ''), name: String(r.NAME ?? '') })),
+      types: (sets[5] ?? []).map((r) => ({ code: String(r.CODE ?? ''), name: String(r.NAME ?? '') })),
     },
   };
 }

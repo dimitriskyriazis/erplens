@@ -73,7 +73,7 @@ export default function RmtTasksClient({ companies, defaultCompany }: Props) {
         {
           name: `View project's plan${code}`,
           icon: PLAN_ICON,
-          action: () => router.push(`/rmt/plan?company=${rowCompany}&prjc=${prjc}`),
+          action: () => router.push(`/rmt/projects/${prjc}?company=${rowCompany}`),
         },
       ];
     },

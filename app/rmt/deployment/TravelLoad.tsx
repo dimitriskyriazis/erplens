@@ -18,7 +18,7 @@ export default function TravelLoad({ teams, away, span, unit }: Props) {
       <div className="avail-head">
         <div>
           <h2>Travel load per team</h2>
-          <p className="avail-sub">{`${unit.long.charAt(0).toUpperCase()}${unit.long.slice(1)}`} away from Athens and the workshop over the window, split by destination.</p>
+          <p className="avail-sub">{`${unit.long.charAt(0).toUpperCase()}${unit.long.slice(1)}`} away from Athens and the workshop over the span, split by destination.</p>
         </div>
       </div>
 
@@ -36,7 +36,7 @@ export default function TravelLoad({ teams, away, span, unit }: Props) {
                 heading: `${t.name === 'No team' ? 'Subcontractors' : t.name} · travel`,
                 rows: t.segments.length
                   ? t.segments.map((s) => [s.location, `${s.units} ${unit.long}`] as [string, string])
-                  : [['Travel', 'none in this window']],
+                  : [['Travel', 'none in this span']],
               })}
             >
               <div className="travel-head">

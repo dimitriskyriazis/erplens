@@ -32,9 +32,15 @@ app/                    routes (App Router)
   api/rmt/tasks         SSRM endpoint for the RMT tasks grid
   api/rmt/timeline      one project's tasks, planned/estimate actions and logged actions
   api/rmt/projects      projects with RMT tasks, for the project picker
+  api/rmt/availability  free days per person per week, and the generic placeholders' demand
+  api/rmt/deployment    where people are, per column, for the board
+  api/rmt/delivery      estimate, planned and done per project and task
   api/meta              connection facts, companies, task counts
   rmt/tasks             RMT tasks grid (server-side row model)
-  rmt/plan              RMT plan: tree of tasks and people with a drawn timeline column
+  rmt/availability      who is free (or busiest) over a span, with unassigned demand under it
+  rmt/deployment        where people are: person by column, colour for destination
+  rmt/projects          estimate / planned / done per project
+  rmt/projects/[prjc]   that project's plan: tasks and people with a drawn timeline column
   rmt/components/       ProjectPicker, useProjectTimeline (shared by RMT screens)
   components/           ServerSideGrid, SideNav, PageHeader
 lib/
@@ -43,6 +49,7 @@ lib/
   rmt/tasksRelation.ts  task relation + column whitelist
   rmt/timelineQueries.ts  actions and logged work per project
   rmt/planModel.ts      rows and bars for the plan grid (pure)
+  rmt/timeScale.ts      span and step, shared by every RMT screen
 scripts/sql/            hand-over scripts (review, then run manually)
 ```
 

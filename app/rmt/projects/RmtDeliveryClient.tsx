@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import PageHeader from '@/app/components/PageHeader';
 import type { Delivery } from '@/lib/rmt/deliveryQueries';
 import PlanVsActual from './PlanVsActual';
-import OverrunHistogram from './OverrunHistogram';
-import NeedsAttention from './NeedsAttention';
 
 type Company = { id: number; name: string };
 
@@ -24,9 +22,8 @@ type Loaded = { key: string; data: Delivery | null; error: string | null };
 export const fmtHours = (n: number): string => Math.round(n).toLocaleString('en-GB');
 
 /**
- * Estimates against logged work: the plan-vs-actual table with its per-task breakdown, a
- * histogram of where effort lands against plan, and the tasks that need a look. One request
- * feeds all three. Read-only; the estimates themselves live in Soft1.
+ * Estimate, planned and done per project, with a per-task breakdown behind each row. One
+ * request feeds the page. Read-only; the figures themselves live in Soft1.
  */
 export default function RmtDeliveryClient({ companies, initial }: Props) {
   const [company, setCompany] = useState(initial.company);
@@ -84,17 +81,17 @@ export default function RmtDeliveryClient({ companies, initial }: Props) {
   const records: Array<[string, string]> = totals
     ? [
         ['Tasks with logged work', fmtHours(totals.tasksWithWork)],
+        ['Estimated hours', fmtHours(totals.estimateHours)],
         ['Planned hours', fmtHours(totals.plannedHours)],
-        ['Logged hours', fmtHours(totals.loggedHours)],
-        ['Tasks over 120% of plan', fmtHours(totals.over120)],
-        ['Actions with no task', fmtHours(totals.orphanActions)],
+        ['Done hours', fmtHours(totals.loggedHours)],
+        ['Tasks carrying an estimate', fmtHours(totals.tasksWithEstimate)],
       ]
     : [];
 
   return (
     <main className="page">
       <PageHeader
-        title="RMT Plan vs actual"
+        title="RMT Projects"
         rightActions={
           data ? (
             <span className="page-count">
@@ -125,7 +122,8 @@ export default function RmtDeliveryClient({ companies, initial }: Props) {
               </select>
             </label>
             <p className="avail-hint">
-              Planned hours are named bookings at 8 hours a person-day. Generic estimates are left out: nobody logs against a placeholder.
+              Estimate is person-days on estimate lines, planned is the named bookings under a task, done is what was logged. All at 8 hours a
+              person-day.
             </p>
           </section>
 
@@ -140,31 +138,23 @@ export default function RmtDeliveryClient({ companies, initial }: Props) {
             </section>
           )}
 
-          <section className={cardClass} aria-label="Plan against actual">
+          <section className={cardClass} aria-label="Estimate, planned and done">
             <PlanVsActual
               projects={data?.projects ?? []}
               tasksByProject={tasksByProject}
               open={open}
               onToggle={toggleProject}
               loading={loading && !data}
+              company={company}
             />
           </section>
-
-          <div className="dep-panels">
-            <section className={cardClass} aria-label="Where effort lands against plan">
-              <OverrunHistogram buckets={data?.buckets ?? []} over120={totals?.over120 ?? 0} loading={loading && !data} />
-            </section>
-            <section className={cardClass} aria-label="Needs attention">
-              <NeedsAttention items={data?.attention ?? []} loading={loading && !data} />
-            </section>
-          </div>
 
           {totals && totals.orphanActions > 0 && (
             <section className="avail-card del-orphan" aria-label="Logged work with no task">
               <span className="del-orphan-value">{fmtHours(totals.orphanHours)}</span>
               <span className="del-orphan-text">
-                hours logged with no task behind them, across {fmtHours(totals.orphanActions)} actions. That work cannot be compared with any
-                estimate, so it sits outside every figure above.
+                hours logged with no task behind them, across {fmtHours(totals.orphanActions)} actions. That work has nothing to compare against,
+                so it sits outside every figure above.
               </span>
             </section>
           )}

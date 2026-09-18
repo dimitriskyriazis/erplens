@@ -1,4 +1,4 @@
-/* RMT availability: filter card, "Who is available" table, week-by-week heatmap. */
+/* RMT availability: the filter card and the "Who is available" table under it. */
 
 .avail-scroll {
   flex: 1;
@@ -53,10 +53,39 @@
   margin-bottom: 12px;
 }
 
-.avail-controls {
+/*
+ * Capacity against unassigned demand, on the right of the table's heading. Two figures side
+ * by side rather than one balance, because they are not the same kind of number: one is room
+ * on people, the other is work nobody holds yet.
+ */
+.avail-cover {
   display: flex;
-  gap: 22px;
   flex-wrap: wrap;
+  gap: 6px 18px;
+  align-items: baseline;
+}
+
+.avail-cover-item {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.avail-cover-item b {
+  font-size: 15px;
+  font-weight: 600;
+  color: #15803d;
+  margin-right: 4px;
+}
+
+.avail-cover-item.is-demand b {
+  color: #475569;
+}
+
+.avail-cover-item em {
+  display: block;
+  font-size: 11px;
+  font-style: normal;
+  color: #94a3b8;
 }
 
 .avail-control {
@@ -174,7 +203,7 @@
   height: 28px;
 }
 
-/* Footer line under each view */
+/* Footer line, used by the delivery and deployment panels. */
 .avail-foot {
   display: flex;
   align-items: center;
@@ -201,18 +230,17 @@
   cursor: pointer;
 }
 
-.link-btn {
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
+/* The one checkbox in the filter row: aligned with the controls beside it, not stretched. */
+.avail-field-check {
+  align-self: flex-end;
+  height: 32px;
   font-size: 12px;
-  color: #2563eb;
-  cursor: pointer;
-  text-decoration: underline;
+  font-weight: 500;
+  color: #0f172a;
 }
 
-/* Who is available */
+
+/* The table */
 .assign-wrap {
   overflow-x: auto;
 }
@@ -310,24 +338,16 @@ table.assign {
   color: #64748b;
 }
 
-.assign .fit {
-  font-size: 12px;
-}
-
-.assign .fit--yes {
-  color: #15803d;
-  font-weight: 600;
-}
-
-.assign .fit--no {
-  color: #64748b;
-}
-
-/* One strip per week: equal cells, a 2px surface gap between them, value printed. */
+/* One cell per column, equal widths, a 2px surface gap between them, value printed. */
 .assign .weeks {
   display: flex;
   gap: 2px;
   min-width: 140px;
+}
+
+/* A one or two week span runs day by day: ten narrower cells in the same track. */
+.assign .weeks--day {
+  min-width: 0;
 }
 
 .mini {
@@ -343,42 +363,40 @@ table.assign {
   cursor: default;
 }
 
-.mini:hover,
-.mini:focus-visible {
-  outline: 2px solid #0f172a;
-  outline-offset: -1px;
+.mini--day {
+  min-width: 28px;
 }
 
-/* Heatmap */
-.heat {
-  overflow-x: auto;
+/* A quarter or half a year: narrower cells, so 13 or 26 of them still fit a screen. */
+.assign .weeks--tight .mini,
+.assign .weeks--tight .mini-head {
+  min-width: 32px;
 }
 
-.heat table {
-  border-collapse: separate;
-  border-spacing: 2px;
-  font-size: 12px;
+/* Dates above the cells, in the same flex track so a column lines up with its date. */
+.assign .strip-head .weeks {
+  margin-top: 3px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
-.heat th {
-  padding: 2px 4px 4px;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: #64748b;
-  white-space: nowrap;
-}
-
-.heat th.week {
-  font-family: var(--font-mono);
+.mini-head {
+  flex: 1 1 0;
+  min-width: 42px;
   text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: #94a3b8;
 }
 
-/* Alternate months take a second ink so the eye can group the columns. */
-.heat th.week.alt {
-  color: #2563eb;
+.assign .weeks--day .mini-head {
+  min-width: 28px;
 }
 
-.heat th.week.is-now {
+/* The column today falls in, so the strip is read from the right place. */
+.mini-head.is-now {
   color: #0f172a;
   text-decoration: underline;
   text-decoration-color: #c2410c;
@@ -386,118 +404,40 @@ table.assign {
   text-underline-offset: 3px;
 }
 
-.heat th.total,
-.heat td.total {
-  text-align: right;
-  padding-left: 10px;
-}
-
-.heat td.init {
-  padding-right: 6px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: #94a3b8;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.heat td.name {
-  padding-right: 10px;
-  max-width: 190px;
-}
-
-.heat td.name button,
-.heat td.name span {
-  display: block;
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  font-size: 12.5px;
-  color: #0f172a;
-  text-align: left;
-  cursor: pointer;
-}
-
-.heat td.name span {
-  cursor: default;
-}
-
-.heat td.name button:hover {
-  text-decoration: underline;
-}
-
-.heat td.name.is-generic span {
-  font-style: italic;
-  color: #475569;
-}
-
-.heat tr.is-pinned td.name button {
-  font-weight: 600;
-}
-
-.heat tr.is-pinned td.name button::before {
-  content: '\25B8';
-  color: #c2410c;
-  margin-right: 4px;
-}
-
-.heat td.cell {
-  width: 52px;
-  min-width: 52px;
-  height: 24px;
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  border-radius: 3px;
-  cursor: default;
-}
-
-.heat td.cell:hover,
-.heat td.cell:focus-visible {
+.mini:hover,
+.mini:focus-visible {
   outline: 2px solid #0f172a;
   outline-offset: -1px;
 }
 
-.heat td.total {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  color: #0f172a;
+/* Placeholder rows: demand for a pool, set apart from the people above them. */
+.assign tr.is-generic td {
+  border-top: 1px solid #e2e8f0;
 }
 
-.heat-legend {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin: 0 0 12px;
-  font-size: 11.5px;
+.assign .name-generic {
+  font-style: italic;
   color: #475569;
 }
 
-.heat-legend i {
-  display: inline-block;
-  width: 24px;
-  height: 14px;
-  border-radius: 2px;
+.assign .total.is-demand-total {
+  font-weight: 500;
+  font-style: italic;
+  color: #475569;
 }
 
-.heat-legend span + i {
-  margin-left: 3px;
-}
-
-.heat-legend i + span {
-  margin-left: 3px;
-  margin-right: 10px;
+/* Pressure under volume: the per-head figure reads as a qualifier, not a second total. */
+.assign .per-head {
+  display: block;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 400;
+  color: #94a3b8;
 }
 
 /*
  * Colour levels. Free days: one green ramp, light to dark, the light end receding toward
- * the surface as the palette rule allows for a heatmap; every cell prints its number.
+ * the surface as the palette rule allows for a heat scale; every cell prints its number.
  * Booked days: the same steps in blue, so the mode is obvious at a glance. Red is reserved
  * for demand above the week. Dark ink on the four lighter steps, white on the darkest.
  */
@@ -567,10 +507,4 @@ table.assign {
 .mode-booked .lvl-5,
 .is-demand.lvl-5 {
   background: #1f5cab;
-}
-
-.heat td.total.is-demand {
-  font-weight: 500;
-  font-style: italic;
-  color: #475569;
 }

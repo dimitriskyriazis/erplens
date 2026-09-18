@@ -3,9 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PageHeader from '@/app/components/PageHeader';
 import type { Availability } from '@/lib/rmt/availabilityQueries';
-import { HEATMAP_WEEKS, TYPE_OPTIONS, addDays, fmtDMY, groupBookings, type HeatMode } from '@/lib/rmt/availabilityModel';
+import { SPAN_OPTIONS, TYPE_OPTIONS, addDays, fmtDMY, groupBookings, isDaySpan, spanLabel, type HeatMode } from '@/lib/rmt/availabilityModel';
 import AssignTable from './AssignTable';
-import WeekHeatmap from './WeekHeatmap';
 
 type Company = { id: number; name: string };
 
@@ -16,10 +15,11 @@ export type AvailabilityInitial = {
   spec: number;
   /** 'yyyy-MM-dd', a Monday. */
   start: string;
-  /** The Monday of the current week, decided on the server so both renders agree. */
+  /** Today, and the Monday of its week, decided on the server so both renders agree. */
+  today: string;
   thisMonday: string;
-  weeks: number;
-  need: number;
+  /** The span the table covers, in weeks. */
+  span: number;
 };
 
 type Props = { companies: Company[]; initial: AvailabilityInitial };
@@ -30,10 +30,11 @@ type AvailabilityResponse = ({ ok: true } & Availability) | { ok: false; error: 
 type Loaded = { key: string; data: Availability | null; error: string | null };
 
 /**
- * Who is free, and when: a filter row, the "Who is available" table for assigning work,
- * and the week-by-week heatmap underneath. One request feeds both; the table looks at the
- * first 2, 4 or 8 weeks of the 14 the heatmap shows. Filters live in the URL so a view can
- * be shared. Assignment itself happens in Soft1; this screen is read-only.
+ * Who is free, and when: a filter row and one table, people ranked by capacity with the
+ * generic placeholders' unassigned demand underneath them. The span decides how far the
+ * request reaches, so changing it refetches rather than slicing something wider. Filters
+ * live in the URL so a view can be shared. Assignment itself happens in Soft1; this screen
+ * is read-only.
  */
 export default function RmtAvailabilityClient({ companies, initial }: Props) {
   const [company, setCompanyState] = useState(initial.company);
@@ -41,14 +42,14 @@ export default function RmtAvailabilityClient({ companies, initial }: Props) {
   const [type, setType] = useState(initial.type);
   const [spec, setSpec] = useState(initial.spec);
   const [start, setStart] = useState(initial.start);
-  const [windowWeeks, setWindowWeeks] = useState(initial.weeks);
-  const [need, setNeed] = useState(initial.need);
-  const [history, setHistory] = useState(true);
+  const [span, setSpan] = useState(initial.span);
+  // Off by default: the page opens on everyone in scope, not only the recently booked.
+  const [history, setHistory] = useState(false);
   const [mode, setMode] = useState<HeatMode>('free');
   const [pinned, setPinned] = useState<number[]>([]);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
 
-  const requestKey = `${company}|${team}|${type}|${spec}|${start}|${history ? 1 : 0}`;
+  const requestKey = `${company}|${team}|${type}|${spec}|${start}|${span}|${history ? 1 : 0}`;
   const loading = loaded?.key !== requestKey;
   // While a new slice loads, the previous one stays on screen, dimmed, so nothing jumps.
   const data = loaded?.data ?? null;
@@ -58,20 +59,20 @@ export default function RmtAvailabilityClient({ companies, initial }: Props) {
     const params = new URLSearchParams();
     params.set('company', String(company));
     if (team) params.set('team', String(team));
-    if (type) params.set('type', type);
+    // Always written, so picking "All" survives a reload instead of falling back to the default.
+    params.set('type', type);
     if (spec) params.set('spec', String(spec));
     params.set('start', start);
-    params.set('weeks', String(windowWeeks));
-    params.set('need', String(need));
+    params.set('span', String(span));
     window.history.replaceState(null, '', `?${params.toString()}`);
-  }, [company, team, type, spec, start, windowWeeks, need]);
+  }, [company, team, type, spec, start, span]);
 
   useEffect(() => {
     let cancelled = false;
     const params = new URLSearchParams({
       company: String(company),
       start,
-      weeks: String(HEATMAP_WEEKS),
+      weeks: String(span),
       team: String(team),
       type,
       specialty: String(spec),
@@ -91,7 +92,7 @@ export default function RmtAvailabilityClient({ companies, initial }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [requestKey, company, team, type, spec, start, history]);
+  }, [requestKey, company, team, type, spec, start, span, history]);
 
   // Teams are per company, so a change of company drops the team and specialty filters.
   const setCompany = useCallback((next: number) => {
@@ -108,6 +109,9 @@ export default function RmtAvailabilityClient({ companies, initial }: Props) {
   const bookings = useMemo(() => groupBookings(data?.bookings ?? []), [data]);
   const options = data?.options ?? null;
   const cardClass = `avail-card${loading ? ' is-loading' : ''}`;
+  // Placeholder rows always read as demand, so with nothing else in view free and booked
+  // would draw the same picture. Better to say the choice does not apply than to fake one.
+  const onlyGeneric = !!data && data.resources.length > 0 && data.resources.every((r) => r.generic);
 
   return (
     <main className="page">
@@ -169,6 +173,24 @@ export default function RmtAvailabilityClient({ companies, initial }: Props) {
               </div>
             </div>
             <div className="avail-field">
+              <span id="avail-mode-label">Show</span>
+              <div className="seg" role="group" aria-labelledby="avail-mode-label">
+                {(['free', 'booked'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className={m === mode ? 'is-active' : undefined}
+                    aria-pressed={m === mode}
+                    disabled={onlyGeneric}
+                    title={onlyGeneric ? 'Generic placeholders are demand on a pool, so they have no free days to show' : undefined}
+                    onClick={() => setMode(m)}
+                  >
+                    {m === 'free' ? 'Free days' : 'Booked days'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="avail-field">
               <span id="avail-from-label">From</span>
               <div className="seg" role="group" aria-labelledby="avail-from-label">
                 <button type="button" onClick={() => setStart(addDays(start, -7))} aria-label="Previous week">
@@ -188,36 +210,32 @@ export default function RmtAvailabilityClient({ companies, initial }: Props) {
                 </button>
               </div>
             </div>
-            <p className="avail-hint">
-              Team, specialty and type filter both views below. The heatmap shows {HEATMAP_WEEKS} weeks from the chosen Monday.
-            </p>
+            {/* Span sits beside From: the two together say which stretch of time is on screen. */}
+            <div className="avail-field">
+              <span id="avail-span-label">Span</span>
+              <div className="seg" role="group" aria-labelledby="avail-span-label">
+                {SPAN_OPTIONS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className={n === span ? 'is-active' : undefined}
+                    aria-pressed={n === span}
+                    title={`${n === 1 ? 'One week' : `${n} weeks`}, ${isDaySpan(n) ? 'day by day' : 'week by week'}`}
+                    onClick={() => setSpan(n)}
+                  >
+                    {spanLabel(n)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="avail-check avail-field-check">
+              <input type="checkbox" checked={history} onChange={(e) => setHistory(e.target.checked)} />
+              Only people booked in the last 12 months
+            </label>
           </section>
 
-          <section className={cardClass} aria-label="Who is available">
-            <AssignTable
-              data={data}
-              bookings={bookings}
-              windowWeeks={windowWeeks}
-              need={need}
-              pinned={pinned}
-              onTogglePin={togglePin}
-              onWindow={setWindowWeeks}
-              onNeed={setNeed}
-            />
-          </section>
-
-          <section className={cardClass} aria-label="Week by week">
-            <WeekHeatmap
-              data={data}
-              bookings={bookings}
-              mode={mode}
-              onMode={setMode}
-              pinned={pinned}
-              onTogglePin={togglePin}
-              history={history}
-              onHistory={setHistory}
-              thisMonday={initial.thisMonday}
-            />
+          <section className={cardClass} aria-label="Assign work">
+            <AssignTable data={data} bookings={bookings} span={span} mode={mode} pinned={pinned} onTogglePin={togglePin} today={initial.today} />
           </section>
         </div>
       </PageHeader>
