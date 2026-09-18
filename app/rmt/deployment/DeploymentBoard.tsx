@@ -1,14 +1,15 @@
 'use client';
 
 import { tipHandlers } from '@/app/rmt/components/barTip';
-import { fmtLong } from '@/lib/rmt/availabilityModel';
-import type { BoardColumn, BoardTeam, ColourBy, ColumnTotal, LegendEntry } from '@/lib/rmt/deploymentModel';
+import { unitCount, type BoardColumn, type BoardTeam, type ColourBy, type ColumnTotal, type Granularity, type LegendEntry, type Unit } from '@/lib/rmt/deploymentModel';
 
 type Props = {
   teams: BoardTeam[];
   columns: BoardColumn[];
   totals: ColumnTotal[];
   legend: LegendEntry[];
+  gran: Granularity;
+  unit: Unit;
   colourBy: ColourBy;
   onColourBy: (by: ColourBy) => void;
   rollColumn: number;
@@ -18,19 +19,19 @@ type Props = {
   loading: boolean;
 };
 
-const weekWord = (n: number) => `${n} ${n === 1 ? 'week' : 'weeks'}`;
-
 /**
- * "Where people are": one row per person, one column per week (or month), the colour saying
- * where they are and the code saying which project. Colour never carries a value alone —
- * every booked cell prints its project code and location code, and the legend names each
- * swatch — which is what lets a five-hue destination palette sit inside a dense grid.
+ * "Where people are": one row per person, one column per day, week or month, the colour
+ * saying where they are and the code saying which project. Colour never carries a value
+ * alone — every booked cell prints its project code and location code, and the legend names
+ * each swatch — which is what lets a five-hue destination palette sit inside a dense grid.
  */
 export default function DeploymentBoard({
   teams,
   columns,
   totals,
   legend,
+  gran,
+  unit,
   colourBy,
   onColourBy,
   rollColumn,
@@ -49,8 +50,8 @@ export default function DeploymentBoard({
         <div>
           <h2>Deployment board</h2>
           <p className="avail-sub">
-            One row per person, one column per {columns[0]?.sub ? 'month' : 'week'}. Colour is where they are, the code is the project. Click a
-            column header for its roll-call.
+            One row per person, one column per {gran}. Colour is where they are, the code is the project. Click a column header for its
+            roll-call.
           </p>
         </div>
         <div className="avail-control">
@@ -81,7 +82,7 @@ export default function DeploymentBoard({
                   className={`dep-col-head${i === rollColumn ? ' is-active' : ''}`}
                   aria-pressed={i === rollColumn}
                   onClick={() => onRollColumn(i)}
-                  title={`Roll-call for ${col.label}${col.sub ? ` ${col.sub}` : ''}`}
+                  title={`Roll-call for ${col.tip}`}
                 >
                   {col.label}
                   {col.sub && <span className="dep-col-sub">{col.sub}</span>}
@@ -98,20 +99,19 @@ export default function DeploymentBoard({
                   key={t.column.key}
                   className="dep-summary"
                   tabIndex={0}
-                  aria-label={`${t.column.label}: ${t.booked} of ${t.capacity} person-weeks booked, ${t.away} away`}
+                  aria-label={`${t.column.tip}: ${t.booked} of ${t.capacity} ${unit.long} booked, ${t.away} away`}
                   {...tipHandlers({
-                    heading: `${t.column.label}${t.column.sub ? ` ${t.column.sub}` : ''}`,
+                    heading: t.column.tip,
                     rows: [
-                      ['Person-weeks booked', String(t.booked)],
+                      [`${unit.long.charAt(0).toUpperCase()}${unit.long.slice(1)} booked`, String(t.booked)],
                       ['Away from base', String(t.away)],
-                      ['Idle person-weeks', String(t.idle)],
-                      ['Week of', fmtLong(t.column.start)],
+                      [`Idle ${unit.long}`, String(t.idle)],
                     ],
                   })}
                   onClick={() => onRollColumn(i)}
                 >
                   {t.segments.map((s) => (
-                    <i key={s.key} style={{ height: `${(s.weeks / Math.max(1, t.capacity)) * 100}%`, background: s.swatch.fill }} />
+                    <i key={s.key} style={{ height: `${(s.units / Math.max(1, t.capacity)) * 100}%`, background: s.swatch.fill }} />
                   ))}
                 </div>
               ))}
@@ -123,7 +123,7 @@ export default function DeploymentBoard({
                 <div className="dep-team-head">
                   <span className="dep-team-name">{team.name === 'No team' ? 'Subcontractors' : team.name}</span>
                   <span className="dep-team-meta">
-                    {team.rows.length} {team.rows.length === 1 ? 'person' : 'people'} · {team.awayWeeks} person-weeks away
+                    {team.rows.length} {team.rows.length === 1 ? 'person' : 'people'} · {team.away} {unit.long} away
                   </span>
                   <span className="dep-rule" />
                 </div>
@@ -139,7 +139,7 @@ export default function DeploymentBoard({
                         ? {
                             heading: row.resource.name,
                             rows: [
-                              [col.sub ? `${col.label} ${col.sub}` : `Week of ${fmtLong(col.start)}`, weekWord(col.weeks.length)] as [string, string],
+                              [col.tip, unitCount(col.slots.length, unit)] as [string, string],
                               ['Project', cell.top.projectCode === '-' ? 'No project' : `${cell.top.projectCode} · ${cell.top.projectName}`] as [string, string],
                               ['Location', cell.top.locationName] as [string, string],
                               ['Team', row.resource.team ?? 'No team'] as [string, string],
@@ -151,7 +151,7 @@ export default function DeploymentBoard({
                         : {
                             heading: row.resource.name,
                             rows: [
-                              [col.sub ? `${col.label} ${col.sub}` : `Week of ${fmtLong(col.start)}`, 'Nothing booked'] as [string, string],
+                              [col.tip, 'Nothing booked'] as [string, string],
                               ['Team', row.resource.team ?? 'No team'] as [string, string],
                             ],
                           };
@@ -163,8 +163,8 @@ export default function DeploymentBoard({
                           tabIndex={0}
                           aria-label={
                             cell.top
-                              ? `${row.resource.name}, ${col.label}: ${cell.top.projectCode} at ${cell.top.locationName}`
-                              : `${row.resource.name}, ${col.label}: nothing booked`
+                              ? `${row.resource.name}, ${col.tip}: ${cell.top.projectCode} at ${cell.top.locationName}`
+                              : `${row.resource.name}, ${col.tip}: nothing booked`
                           }
                           {...tipHandlers(tip)}
                         >
@@ -173,8 +173,9 @@ export default function DeploymentBoard({
                         </div>
                       );
                     })}
-                    <div className="dep-total-col dep-away" title="Weeks away from Athens and the workshop">
-                      {row.awayWeeks}w
+                    <div className="dep-total-col dep-away" title={`${unit.one[0].toUpperCase()}${unit.one.slice(1)}s away from Athens and the workshop`}>
+                      {row.away}
+                      {unit.short}
                     </div>
                   </div>
                 ))}
@@ -189,7 +190,10 @@ export default function DeploymentBoard({
           <span key={l.key} className="dep-legend-item">
             <i style={{ background: l.swatch.fill }} className={l.swatch.empty ? 'is-empty' : undefined} />
             {l.label}
-            <em>{l.weeks}w</em>
+            <em>
+              {l.units}
+              {unit.short}
+            </em>
           </span>
         ))}
       </div>

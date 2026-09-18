@@ -4,7 +4,8 @@
  * deploymentQueries.ts for the semantics).
  *
  * Parameters: @company, @start (yyyy-MM-dd, a Monday), @days (weeks * 7), @team (RSRCTYPE,
- * 0 = all), @type (UTBL01 code for SODTYPE 25, '' = all), @spec (CCCCLRMTEIDIKOTITA, 0 = all).
+ * 0 = all), @type (UTBL01 code for SODTYPE 25, '' = all), @spec (CCCCLRMTEIDIKOTITA, 0 = all),
+ * @grain (0 = one slot per week, 1 = one slot per working day).
  *
  * Like availabilitySql.ts and tasksRelation.ts, this reads the base tables directly rather
  * than dbo.eqrRMTResources / eqrRMTActionsPlanned / eqrRMTTasks. Those views belong to
@@ -42,7 +43,11 @@ n AS (
 ),
 days AS (
     -- Monday to Friday only. 1900-01-01 was a Monday, so this is independent of DATEFIRST.
-    SELECT DATEADD(day, n.i, p.start_date) AS d, n.i / 7 AS wk
+    -- The slot is the board's column unit: the day offset from the start when @grain = 1,
+    -- otherwise the week index. Weekend offsets never appear either way, so a day slot is
+    -- always w*7 + 0..4 and the client can lay the columns out without a round trip.
+    SELECT DATEADD(day, n.i, p.start_date) AS d,
+           CASE WHEN @grain = 1 THEN n.i ELSE n.i / 7 END AS slot
     FROM n CROSS JOIN p
     WHERE (DATEDIFF(day, '19000101', DATEADD(day, n.i, p.start_date)) % 7) < 5
 ),
@@ -59,10 +64,10 @@ bk AS (
       AND a.fromdate IS NOT NULL AND a.finaldate IS NOT NULL
       AND a.finaldate >= p.start_date AND a.fromdate < p.end_date
 )
--- One row per person per week per engagement: how many working days of that week the
--- person is booked on that project at that location. A week with two projects yields two
+-- One row per person per slot per engagement: how many working days of that slot the
+-- person is booked on that project at that location. A slot with two projects yields two
 -- rows, and the board picks the one holding the most days for the cell's colour and code.
-SELECT bk.RSRC, days.wk,
+SELECT bk.RSRC, days.slot,
        ISNULL(pj.CODE, '-')                 AS project_code,
        ISNULL(pj.NAME, '')                  AS project_name,
        ISNULL(loc.CODE, '-')                AS location_code,
@@ -74,8 +79,8 @@ LEFT JOIN dbo.PRJC     pj  ON pj.COMPANY = bk.COMPANY AND pj.PRJC = bk.PRJC
 LEFT JOIN dbo.PRJLINES t   ON t.COMPANY = bk.COMPANY AND t.PRJC = bk.PRJC
                           AND t.PRJLINES = bk.PRJLINESS AND t.SOPLTYPE = 11
 LEFT JOIN dbo.CCCCLPRJLINELOCATION loc ON loc.PRJLINELOCATION = t.CCCCLPRJLINELOCATION
-GROUP BY bk.RSRC, days.wk, pj.CODE, pj.NAME, loc.CODE, loc.NAME
-ORDER BY bk.RSRC, days.wk, COUNT(*) DESC, pj.CODE;
+GROUP BY bk.RSRC, days.slot, pj.CODE, pj.NAME, loc.CODE, loc.NAME
+ORDER BY bk.RSRC, days.slot, COUNT(*) DESC, pj.CODE;
 
 WITH ${RES}
 SELECT res.RSRC, res.NAME, res.CODE1,

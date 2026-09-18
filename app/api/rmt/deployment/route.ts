@@ -9,7 +9,12 @@ const querySchema = z.object({
   /** UTBL01 code for SODTYPE 25 ('Telm', 'Ext'), '' = all. */
   type: z.string().regex(/^[A-Za-z0-9_-]{0,20}$/).default(''),
   specialty: z.coerce.number().int().min(0).default(0),
+  /** 'day' cuts the window per working day instead of per week. */
+  grain: z.enum(['week', 'day']).default('week'),
 });
+
+/** Longest window served day by day: five rows a week per person adds up fast. */
+const DAY_GRAIN_MAX_WEEKS = 2;
 
 /** Which project and location holds each named resource in each week of a window. Read-only. */
 export async function GET(req: Request) {
@@ -27,6 +32,7 @@ export async function GET(req: Request) {
       team: q.team,
       type: q.type,
       specialty: q.specialty,
+      grain: q.grain === 'day' && q.weeks <= DAY_GRAIN_MAX_WEEKS ? 'day' : 'week',
     });
     return Response.json({ ok: true, ...data });
   } catch (err) {

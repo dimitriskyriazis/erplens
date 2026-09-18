@@ -26,18 +26,26 @@ export type DeploymentFilters = {
   type: string;
   /** CCCCLRMTEIDIKOTITA id, 0 = all specialties. */
   specialty: number;
+  /**
+   * How finely the window is cut. 'week' is one row per person per week; 'day' is one row
+   * per person per working day, which is five times the rows and is only asked for on the
+   * one- and two-week windows the board draws day by day.
+   */
+  grain: DeploymentGrain;
 };
 
-/** One project/location engagement holding a person for part of one week. */
+export type DeploymentGrain = 'week' | 'day';
+
+/** One project/location engagement holding a person for part of one slot. */
 export type DeploymentCell = {
   rsrc: number;
-  /** Week index from the window start, 0-based. */
-  week: number;
+  /** Slot index from the window start, 0-based: a week index, or a day offset at day grain. */
+  slot: number;
   projectCode: string;
   projectName: string;
   locationCode: string;
   locationName: string;
-  /** Monday-to-Friday days of that week spent on this engagement, 1..5. */
+  /** Monday-to-Friday days of that slot spent on this engagement: 1..5, or always 1 by day. */
   days: number;
 };
 
@@ -60,6 +68,7 @@ export type DeploymentOptions = {
 export type Deployment = {
   start: string;
   weeks: number;
+  grain: DeploymentGrain;
   resources: DeploymentResource[];
   cells: DeploymentCell[];
   /** Named, active resources in the company: the denominator for "showing N of M". */
@@ -84,14 +93,16 @@ export async function getDeployment(f: DeploymentFilters): Promise<Deployment> {
     { key: 'team', value: f.team },
     { key: 'type', value: f.type },
     { key: 'spec', value: f.specialty },
+    { key: 'grain', value: f.grain === 'day' ? 1 : 0 },
   ]);
 
   return {
     start: f.start,
     weeks: f.weeks,
+    grain: f.grain,
     cells: (sets[0] ?? []).map((r) => ({
       rsrc: Number(r.RSRC),
-      week: num(r.wk),
+      slot: num(r.slot),
       projectCode: String(r.project_code ?? '-'),
       projectName: String(r.project_name ?? '').trim(),
       locationCode: String(r.location_code ?? '-'),

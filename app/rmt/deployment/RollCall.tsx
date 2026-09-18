@@ -1,6 +1,5 @@
 'use client';
 
-import { fmtLong } from '@/lib/rmt/availabilityModel';
 import type { BoardColumn, RollCallGroup } from '@/lib/rmt/deploymentModel';
 
 type Props = { groups: RollCallGroup[]; column: BoardColumn | undefined; people: number };
@@ -9,7 +8,7 @@ type Props = { groups: RollCallGroup[]; column: BoardColumn | undefined; people:
 export default function RollCall({ groups, column, people }: Props) {
   const notBooked = groups.find((g) => g.name === 'Not booked')?.people.length ?? 0;
   const deployed = people - notBooked;
-  const heading = column ? (column.sub ? `${column.label} ${column.sub}` : `week of ${fmtLong(column.start)}`) : '—';
+  const heading = column?.tip ?? '—';
 
   return (
     <>

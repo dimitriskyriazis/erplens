@@ -15,15 +15,41 @@
  *    travel. That is the question the board exists to answer.
  */
 import type { DeploymentCell, DeploymentResource } from './deploymentQueries';
-import { addDays, parseIso } from './availabilityModel';
+import { addDays, fmtLong, parseIso } from './availabilityModel';
 
-export const SPAN_OPTIONS = [4, 8, 13, 26] as const;
+export const SPAN_OPTIONS = [1, 2, 4, 8, 13, 26] as const;
 export type Span = (typeof SPAN_OPTIONS)[number];
+/** Longest span the board can draw one column per working day: 5 or 10 columns. */
+export const DAILY_UP_TO = 2;
 /** Longest span still readable one column per week; past it the board steps by month. */
 export const WEEKLY_UP_TO = 13;
+/** Shortest span worth stepping by month; below it a month column is the whole board. */
+export const MONTHLY_FROM = 4;
 
-export type Granularity = 'week' | 'month';
+export type Granularity = 'day' | 'week' | 'month';
 export type ColourBy = 'place' | 'project';
+
+/** Whether a step can be drawn at all for a span. */
+export const granAllowed = (gran: Granularity, span: number): boolean =>
+  gran === 'day' ? span <= DAILY_UP_TO : gran === 'week' ? span <= WEEKLY_UP_TO : span >= MONTHLY_FROM;
+
+/**
+ * The step a span opens on: a week or two is worth seeing day by day, a quarter is not
+ * readable that way, and half a year only works stepped by month.
+ */
+export const granFor = (span: number): Granularity => (span <= DAILY_UP_TO ? 'day' : span <= WEEKLY_UP_TO ? 'week' : 'month');
+
+/**
+ * What one column unit is worth, so the panels can say "person-days" on a day board and
+ * "person-weeks" on a week or month one. A month column is several week slots, so the unit
+ * there is still the week.
+ */
+export type Unit = { one: string; short: string; long: string };
+export const unitOf = (gran: Granularity): Unit =>
+  gran === 'day' ? { one: 'day', short: 'd', long: 'person-days' } : { one: 'week', short: 'w', long: 'person-weeks' };
+
+/** "3 days", "1 week". */
+export const unitCount = (n: number, unit: Unit): string => `${n} ${unit.one}${n === 1 ? '' : 's'}`;
 
 export type Swatch = { fill: string; ink: string; /** The 'nothing booked' swatch: drawn as a dashed outline, not a fill. */ empty?: true };
 
@@ -78,28 +104,57 @@ const OTHER_PROJECTS_LABEL = 'Other projects';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const WEEKDAYS_LONG = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+/** Working days per week: the window never covers a weekend. */
+const WORK_DAYS = WEEKDAYS.length;
 
 export type BoardColumn = {
   key: string;
   label: string;
-  /** Year suffix on month columns, '' on week columns. */
+  /** The date under a weekday on a day column, the year on a month column, '' on a week one. */
   sub: string;
-  /** Week indices from the window start that this column covers. */
-  weeks: number[];
-  /** 'yyyy-MM-dd' of the first Monday in the column, for the hover card. */
+  /**
+   * Slot indices from the window start that this column covers, matching the query's grain:
+   * day offsets on a day board, week indices on a week or month one.
+   */
+  slots: number[];
+  /** 'yyyy-MM-dd' of the first day in the column. */
   start: string;
+  /** How the column names itself in a hover card: 'Monday 14 September 2026', 'Sep 2026'. */
+  tip: string;
 };
 
-/** Week columns, or month columns grouping the weeks by the month their Monday falls in. */
+/**
+ * Day columns (Monday to Friday, weekends never shown), week columns, or month columns
+ * grouping the weeks by the month their Monday falls in.
+ */
 export function buildColumns(start: string, weeks: number, gran: Granularity): BoardColumn[] {
+  if (gran === 'day') {
+    // Day offsets skip the weekend, exactly as the query's slots do: w*7 + 0..4.
+    return Array.from({ length: weeks * WORK_DAYS }, (_, n) => {
+      const i = Math.floor(n / WORK_DAYS) * 7 + (n % WORK_DAYS);
+      const iso = addDays(start, i);
+      return {
+        key: iso,
+        label: WEEKDAYS[n % WORK_DAYS],
+        sub: `${iso.slice(8, 10)}/${iso.slice(5, 7)}`,
+        slots: [i],
+        start: iso,
+        tip: `${WEEKDAYS_LONG[n % WORK_DAYS]} ${fmtLong(iso)}`,
+      };
+    });
+  }
   const all = Array.from({ length: weeks }, (_, i) => ({ i, iso: addDays(start, i * 7) }));
   if (gran === 'week') {
     return all.map((w) => ({
       key: w.iso,
       label: `${w.iso.slice(8, 10)}/${w.iso.slice(5, 7)}`,
       sub: '',
-      weeks: [w.i],
+      slots: [w.i],
       start: w.iso,
+      tip: `Week of ${fmtLong(w.iso)}`,
     }));
   }
   const byMonth = new Map<string, BoardColumn>();
@@ -107,8 +162,16 @@ export function buildColumns(start: string, weeks: number, gran: Granularity): B
     const d = parseIso(w.iso);
     const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
     const existing = byMonth.get(key);
-    if (existing) existing.weeks.push(w.i);
-    else byMonth.set(key, { key, label: MONTHS[d.getMonth()], sub: String(d.getFullYear()).slice(2), weeks: [w.i], start: w.iso });
+    if (existing) existing.slots.push(w.i);
+    else
+      byMonth.set(key, {
+        key,
+        label: MONTHS[d.getMonth()],
+        sub: String(d.getFullYear()).slice(2),
+        slots: [w.i],
+        start: w.iso,
+        tip: `${MONTHS_LONG[d.getMonth()]} ${d.getFullYear()}`,
+      });
   });
   return Array.from(byMonth.values());
 }
@@ -140,15 +203,19 @@ export type BoardCell = {
   away: boolean;
 };
 
+/**
+ * Every count below is in column units: person-days on a day board, person-weeks on a week
+ * or month one, because a month column is a run of week slots. `unitOf` names them.
+ */
 export type BoardRow = {
   resource: DeploymentResource;
   cells: BoardCell[];
-  /** Weeks in the window spent away from Athens and the workshop. */
-  awayWeeks: number;
-  bookedWeeks: number;
+  /** Units in the window spent away from Athens and the workshop. */
+  away: number;
+  booked: number;
 };
 
-export type BoardTeam = { name: string; rows: BoardRow[]; awayWeeks: number };
+export type BoardTeam = { name: string; rows: BoardRow[]; away: number };
 
 /** Key for the colour lookup and the legend, per colour mode. */
 const keyOf = (e: Engagement, by: ColourBy): string => (by === 'place' ? e.locationName : e.projectCode);
@@ -169,11 +236,11 @@ export function buildBoard(
   by: ColourBy,
   projects: Map<string, Swatch>,
 ): BoardTeam[] {
-  // (resource, week) -> engagements, already ordered most days first by the query.
-  const byResourceWeek = new Map<string, Engagement[]>();
+  // (resource, slot) -> engagements, already ordered most days first by the query.
+  const byResourceSlot = new Map<string, Engagement[]>();
   cells.forEach((c) => {
-    const key = `${c.rsrc}|${c.week}`;
-    const list = byResourceWeek.get(key);
+    const key = `${c.rsrc}|${c.slot}`;
+    const list = byResourceSlot.get(key);
     const e: Engagement = {
       projectCode: c.projectCode,
       projectName: c.projectName,
@@ -182,17 +249,17 @@ export function buildBoard(
       days: c.days,
     };
     if (list) list.push(e);
-    else byResourceWeek.set(key, [e]);
+    else byResourceSlot.set(key, [e]);
   });
 
   const rows: BoardRow[] = resources.map((resource) => {
-    let awayWeeks = 0;
-    let bookedWeeks = 0;
+    let away = 0;
+    let booked = 0;
     const rowCells = columns.map((col) => {
-      // Merge the column's weeks, adding up days per engagement so the dominant one wins.
+      // Merge the column's slots, adding up days per engagement so the dominant one wins.
       const merged = new Map<string, Engagement>();
-      col.weeks.forEach((w) => {
-        (byResourceWeek.get(`${resource.rsrc}|${w}`) ?? []).forEach((e) => {
+      col.slots.forEach((s) => {
+        (byResourceSlot.get(`${resource.rsrc}|${s}`) ?? []).forEach((e) => {
           const k = `${e.projectCode}|${e.locationCode}`;
           const seen = merged.get(k);
           if (seen) seen.days += e.days;
@@ -202,8 +269,8 @@ export function buildBoard(
       const all = Array.from(merged.values()).sort((a, b) => b.days - a.days || a.projectCode.localeCompare(b.projectCode));
       const top = all[0] ?? null;
       if (top) {
-        bookedWeeks += col.weeks.length;
-        if (isAway(top.locationCode)) awayWeeks += col.weeks.length;
+        booked += col.slots.length;
+        if (isAway(top.locationCode)) away += col.slots.length;
       }
       if (!top) {
         return { column: col.key, top: null, all, swatch: EMPTY_SWATCH, code: '—', sub: '', away: false } satisfies BoardCell;
@@ -218,7 +285,7 @@ export function buildBoard(
         away: isAway(top.locationCode),
       } satisfies BoardCell;
     });
-    return { resource, cells: rowCells, awayWeeks, bookedWeeks };
+    return { resource, cells: rowCells, away, booked };
   });
 
   // Group by team, keeping the query's name order inside each and putting the people with
@@ -231,11 +298,25 @@ export function buildBoard(
     else teams.set(name, [r]);
   });
   return Array.from(teams.entries())
-    .map(([name, teamRows]) => ({ name, rows: teamRows, awayWeeks: teamRows.reduce((s, r) => s + r.awayWeeks, 0) }))
+    .map(([name, teamRows]) => ({ name, rows: teamRows, away: teamRows.reduce((s, r) => s + r.away, 0) }))
     .sort((a, b) => Number(a.name === 'No team') - Number(b.name === 'No team') || a.name.localeCompare(b.name));
 }
 
-export type LegendEntry = { key: string; label: string; swatch: Swatch; weeks: number };
+export type LegendEntry = { key: string; label: string; swatch: Swatch; units: number };
+
+/**
+ * How one booked cell is named and coloured under the current mode. Only the projects
+ * holding a hue are named; the long tail shares one grey and one entry, because 40
+ * identical swatches would be a worse lie than "other".
+ */
+function segmentOf(top: Engagement, by: ColourBy, projects: Map<string, Swatch>): Omit<LegendEntry, 'units'> {
+  const tail = by === 'project' && !projects.has(top.projectCode);
+  return {
+    key: tail ? '~other' : keyOf(top, by),
+    label: tail ? OTHER_PROJECTS_LABEL : by === 'place' ? top.locationName : top.projectCode === '-' ? 'No project' : top.projectCode,
+    swatch: swatchFor(top, by, projects),
+  };
+}
 
 /** Legend entries over what is actually on the board, heaviest first, plus "Not booked". */
 export function buildLegend(teams: BoardTeam[], by: ColourBy, projects: Map<string, Swatch>, columns: BoardColumn[]): LegendEntry[] {
@@ -245,30 +326,19 @@ export function buildLegend(teams: BoardTeam[], by: ColourBy, projects: Map<stri
   teams.forEach((t) =>
     t.rows.forEach((r) =>
       r.cells.forEach((c, i) => {
-        const span = columns[i]?.weeks.length ?? 1;
+        const span = columns[i]?.slots.length ?? 1;
         totalCells += span;
         if (!c.top) return;
         bookedCells += span;
-        // Only the projects holding a hue are named in the legend; the long tail shares one
-        // grey and one entry, because 40 identical swatches would be a worse lie than "other".
-        const tail = by === 'project' && !projects.has(c.top.projectCode);
-        const key = tail ? '~other' : keyOf(c.top, by);
-        const label = tail
-          ? OTHER_PROJECTS_LABEL
-          : by === 'place'
-            ? c.top.locationName
-            : c.top.projectCode === '-'
-              ? 'No project'
-              : c.top.projectCode;
-        const swatch = swatchFor(c.top, by, projects);
+        const { key, label, swatch } = segmentOf(c.top, by, projects);
         const seen = tally.get(key);
-        if (seen) seen.weeks += span;
-        else tally.set(key, { key, label, swatch, weeks: span });
+        if (seen) seen.units += span;
+        else tally.set(key, { key, label, swatch, units: span });
       }),
     ),
   );
-  const entries = Array.from(tally.values()).sort((a, b) => b.weeks - a.weeks || a.label.localeCompare(b.label));
-  entries.push({ key: '~none', label: 'Not booked', swatch: EMPTY_SWATCH, weeks: totalCells - bookedCells });
+  const entries = Array.from(tally.values()).sort((a, b) => b.units - a.units || a.label.localeCompare(b.label));
+  entries.push({ key: '~none', label: 'Not booked', swatch: EMPTY_SWATCH, units: totalCells - bookedCells });
   return entries;
 }
 
@@ -292,26 +362,84 @@ export function rollCall(teams: BoardTeam[], columnIndex: number): RollCallGroup
   );
 }
 
-export type TravelTeam = { name: string; weeks: number; segments: Array<{ location: string; weeks: number; swatch: Swatch }> };
+export type TravelTeam = { name: string; units: number; segments: Array<{ location: string; units: number; swatch: Swatch }> };
 
-/** Person-weeks away from base per team, split by destination, heaviest team first. */
+/** Person-units away from base per team, split by destination, heaviest team first. */
 export function travelLoad(teams: BoardTeam[], columns: BoardColumn[]): TravelTeam[] {
   return teams
     .map((t) => {
-      const byPlace = new Map<string, { location: string; weeks: number; swatch: Swatch }>();
+      const byPlace = new Map<string, { location: string; units: number; swatch: Swatch }>();
       t.rows.forEach((r) =>
         r.cells.forEach((c, i) => {
           if (!c.top || !c.away) return;
-          const span = columns[i]?.weeks.length ?? 1;
+          const span = columns[i]?.slots.length ?? 1;
           const seen = byPlace.get(c.top.locationName);
-          if (seen) seen.weeks += span;
-          else byPlace.set(c.top.locationName, { location: c.top.locationName, weeks: span, swatch: locationSwatch(c.top.locationCode) });
+          if (seen) seen.units += span;
+          else byPlace.set(c.top.locationName, { location: c.top.locationName, units: span, swatch: locationSwatch(c.top.locationCode) });
         }),
       );
-      const segments = Array.from(byPlace.values()).sort((a, b) => b.weeks - a.weeks);
-      return { name: t.name, weeks: segments.reduce((s, g) => s + g.weeks, 0), segments };
+      const segments = Array.from(byPlace.values()).sort((a, b) => b.units - a.units);
+      return { name: t.name, units: segments.reduce((s, g) => s + g.units, 0), segments };
     })
-    .sort((a, b) => b.weeks - a.weeks || a.name.localeCompare(b.name));
+    .sort((a, b) => b.units - a.units || a.name.localeCompare(b.name));
+}
+
+export type SpecialtyRow = {
+  name: string;
+  /** People on the board holding this specialty: the bar's denominator, with the window. */
+  people: number;
+  booked: number;
+  away: number;
+  capacity: number;
+  segments: Array<{ key: string; label: string; units: number; swatch: Swatch }>;
+};
+
+const NO_SPECIALTY = 'No specialty';
+
+/** "Installation, Commissioning" -> the two names; a person with none is their own group. */
+const splitSpecialties = (v: string | null): string[] => {
+  const names = (v ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  return names.length ? names : [NO_SPECIALTY];
+};
+
+/**
+ * Load per specialty: how much of each skill's capacity is booked over the window, split by
+ * the same colour the board is using, heaviest first.
+ *
+ * Someone holding two specialties counts in both rows, because both skills are equally
+ * unavailable while that person is out — so the rows deliberately add up to more than the
+ * board. Capacity is the whole bench, idle people included, which is why this reads the
+ * unfiltered board rather than the one the "hide idle" checkbox has thinned.
+ */
+export function specialtyLoad(teams: BoardTeam[], columns: BoardColumn[], by: ColourBy, projects: Map<string, Swatch>): SpecialtyRow[] {
+  const units = columns.reduce((n, c) => n + c.slots.length, 0);
+  const rows = new Map<string, SpecialtyRow & { bySeg: Map<string, { key: string; label: string; units: number; swatch: Swatch }> }>();
+  teams.forEach((t) =>
+    t.rows.forEach((r) =>
+      splitSpecialties(r.resource.specialties).forEach((name) => {
+        const row = rows.get(name) ?? { name, people: 0, booked: 0, away: 0, capacity: 0, segments: [], bySeg: new Map() };
+        row.people += 1;
+        r.cells.forEach((c, i) => {
+          if (!c.top) return;
+          const span = columns[i]?.slots.length ?? 1;
+          row.booked += span;
+          if (c.away) row.away += span;
+          const seg = segmentOf(c.top, by, projects);
+          const seen = row.bySeg.get(seg.key);
+          if (seen) seen.units += span;
+          else row.bySeg.set(seg.key, { ...seg, units: span });
+        });
+        rows.set(name, row);
+      }),
+    ),
+  );
+  return Array.from(rows.values())
+    .map(({ bySeg, ...row }) => ({
+      ...row,
+      capacity: row.people * units,
+      segments: Array.from(bySeg.values()).sort((a, b) => b.units - a.units || a.label.localeCompare(b.label)),
+    }))
+    .sort((a, b) => b.booked - a.booked || b.people - a.people || a.name.localeCompare(b.name));
 }
 
 export type ColumnTotal = {
@@ -320,27 +448,27 @@ export type ColumnTotal = {
   away: number;
   capacity: number;
   idle: number;
-  segments: Array<{ key: string; weeks: number; swatch: Swatch }>;
+  segments: Array<{ key: string; units: number; swatch: Swatch }>;
 };
 
-/** Column headers for the summary strip: person-weeks booked and away per column. */
+/** Column headers for the summary strip: person-units booked and away per column. */
 export function columnTotals(teams: BoardTeam[], columns: BoardColumn[]): ColumnTotal[] {
   return columns.map((col, i) => {
-    const segments = new Map<string, { key: string; weeks: number; swatch: Swatch }>();
+    const segments = new Map<string, { key: string; units: number; swatch: Swatch }>();
     let booked = 0;
     let away = 0;
     let capacity = 0;
     teams.forEach((t) =>
       t.rows.forEach((r) => {
-        capacity += col.weeks.length;
+        capacity += col.slots.length;
         const c = r.cells[i];
         if (!c?.top) return;
-        booked += col.weeks.length;
-        if (c.away) away += col.weeks.length;
+        booked += col.slots.length;
+        if (c.away) away += col.slots.length;
         const key = c.swatch.fill;
         const seen = segments.get(key);
-        if (seen) seen.weeks += col.weeks.length;
-        else segments.set(key, { key, weeks: col.weeks.length, swatch: c.swatch });
+        if (seen) seen.units += col.slots.length;
+        else segments.set(key, { key, units: col.slots.length, swatch: c.swatch });
       }),
     );
     return {
@@ -349,7 +477,7 @@ export function columnTotals(teams: BoardTeam[], columns: BoardColumn[]): Column
       away,
       capacity,
       idle: capacity - booked,
-      segments: Array.from(segments.values()).sort((a, b) => b.weeks - a.weeks),
+      segments: Array.from(segments.values()).sort((a, b) => b.units - a.units),
     };
   });
 }

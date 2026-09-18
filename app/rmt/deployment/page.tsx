@@ -1,7 +1,7 @@
 import RmtDeploymentClient, { type DeploymentInitial } from './RmtDeploymentClient';
 import { getMeta } from '@/lib/meta';
 import { TYPE_OPTIONS, isoDate, mondayOf } from '@/lib/rmt/availabilityModel';
-import { SPAN_OPTIONS, WEEKLY_UP_TO, type Granularity, type Span } from '@/lib/rmt/deploymentModel';
+import { SPAN_OPTIONS, granAllowed, granFor, type Granularity, type Span } from '@/lib/rmt/deploymentModel';
 
 // Reads the live ERP on every request; never prerender at build time.
 export const dynamic = 'force-dynamic';
@@ -28,9 +28,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   const typeRaw = first(sp.type) ?? '';
   const spanRaw = Number(first(sp.span));
   const span = (SPAN_OPTIONS as readonly number[]).includes(spanRaw) ? (spanRaw as Span) : 8;
-  const granRaw = first(sp.step);
-  // A 26-week board is unreadable one column per week, so long spans open stepped by month.
-  const gran: Granularity = granRaw === 'week' || granRaw === 'month' ? granRaw : span > WEEKLY_UP_TO ? 'month' : 'week';
+  const granRaw = first(sp.step) as Granularity | undefined;
+  // A step out of step with the span (a 26-week board one column per day) is dropped for the
+  // one that span opens on, so a hand-edited link can never reach the client mismatched.
+  const gran: Granularity =
+    granRaw && ['day', 'week', 'month'].includes(granRaw) && granAllowed(granRaw, span) ? granRaw : granFor(span);
 
   const initial: DeploymentInitial = {
     company: Number(first(sp.company)) || defaultCompany,

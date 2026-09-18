@@ -120,6 +120,9 @@
   --dep-name-w: 220px;
   --dep-total-w: 54px;
   min-width: calc(var(--dep-name-w) + var(--dep-total-w) + var(--dep-cols) * 30px);
+  /* A one- or two-week window must not stretch its cells into slabs; past ~8 columns the
+     cap is wider than the viewport, so long boards are unaffected. */
+  max-width: calc(var(--dep-name-w) + var(--dep-total-w) + (var(--dep-cols) + 1) * 2px + var(--dep-cols) * 96px);
 }
 
 .dep-head-row,
@@ -452,6 +455,67 @@
 }
 
 .travel-track i {
+  display: block;
+  height: 100%;
+}
+
+/* Deployment by specialty: one bar per skill, each against its own capacity. */
+.specload-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.specload-row {
+  cursor: default;
+  border-radius: 4px;
+}
+
+.specload-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.specload-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.specload-name {
+  font-size: 12px;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.specload-people {
+  flex: 1;
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.specload-total {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The track is the specialty's whole capacity; what is left showing is the idle bench. */
+.specload-track {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  background: var(--surface-muted);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.specload-track i {
   display: block;
   height: 100%;
 }

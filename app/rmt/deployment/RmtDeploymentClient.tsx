@@ -6,20 +6,24 @@ import type { Deployment } from '@/lib/rmt/deploymentQueries';
 import { TYPE_OPTIONS, addDays, fmtDMY, isoDate, mondayOf, parseIso } from '@/lib/rmt/availabilityModel';
 import {
   SPAN_OPTIONS,
-  WEEKLY_UP_TO,
   buildBoard,
   buildColumns,
   buildLegend,
   columnTotals,
+  granAllowed,
+  granFor,
   projectSwatches,
   rollCall,
+  specialtyLoad,
   travelLoad,
+  unitOf,
   type ColourBy,
   type Granularity,
   type Span,
 } from '@/lib/rmt/deploymentModel';
 import DeploymentBoard from './DeploymentBoard';
 import RollCall from './RollCall';
+import SpecialtyLoad from './SpecialtyLoad';
 import TravelLoad from './TravelLoad';
 
 type Company = { id: number; name: string };
@@ -87,7 +91,10 @@ export default function RmtDeploymentClient({ companies, initial }: Props) {
   const [hideIdle, setHideIdle] = useState(true);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
 
-  const requestKey = `${company}|${team}|${type}|${spec}|${start}|${span}`;
+  // A day board needs the window cut per working day, so the step is part of the request.
+  const grain = gran === 'day' ? 'day' : 'week';
+  const unit = unitOf(gran);
+  const requestKey = `${company}|${team}|${type}|${spec}|${start}|${span}|${grain}`;
   const loading = loaded?.key !== requestKey;
   // While a new slice loads, the previous one stays on screen, dimmed, so nothing jumps.
   const data = loaded?.data ?? null;
@@ -115,6 +122,7 @@ export default function RmtDeploymentClient({ companies, initial }: Props) {
       team: String(team),
       type,
       specialty: String(spec),
+      grain,
     });
     fetch(`/api/rmt/deployment?${params.toString()}`)
       .then((r) => r.json() as Promise<DeploymentResponse>)
@@ -130,7 +138,7 @@ export default function RmtDeploymentClient({ companies, initial }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [requestKey, company, team, type, spec, start, span]);
+  }, [requestKey, company, team, type, spec, start, span, grain]);
 
   // Teams are per company, so a change of company drops the team and specialty filters.
   const setCompany = useCallback((next: number) => {
@@ -139,11 +147,12 @@ export default function RmtDeploymentClient({ companies, initial }: Props) {
     setSpec(0);
   }, []);
 
-  // Past 13 weeks a week-per-column board stops being readable, so the step follows.
+  // The step follows the span: a week or two is worth seeing day by day, half a year only
+  // works by month. The Step control is still there to override it afterwards.
   const setSpan = useCallback((next: Span) => {
     setSpanState(next);
     setRollColumn(0);
-    setGran((g) => (next > WEEKLY_UP_TO ? 'month' : g));
+    setGran(granFor(next));
   }, []);
 
   const shiftWindow = useCallback(
@@ -158,27 +167,36 @@ export default function RmtDeploymentClient({ companies, initial }: Props) {
     setStart(next);
     setSpanState(nextSpan);
     setRollColumn(0);
-    setGran(nextSpan > WEEKLY_UP_TO ? 'month' : 'week');
+    setGran(granFor(nextSpan));
   }, []);
 
   const columns = useMemo(() => buildColumns(start, span, gran), [start, span, gran]);
   const projects = useMemo(() => projectSwatches(data?.projectRank ?? []), [data]);
 
-  const teams = useMemo(() => {
+  // The whole board, before "hide idle": the specialty panel needs the idle people too,
+  // because they are the denominator of a specialty's capacity.
+  const allTeams = useMemo(() => {
     if (!data) return [];
-    const built = buildBoard(data.resources, data.cells, columns, colourBy, projects);
-    if (!hideIdle) return built;
-    return built.map((t) => ({ ...t, rows: t.rows.filter((r) => r.bookedWeeks > 0) })).filter((t) => t.rows.length > 0);
-  }, [data, columns, colourBy, projects, hideIdle]);
+    // Week data in a day board's columns (or the other way round) would silently read the
+    // wrong slots, so the board waits for the response that matches the step.
+    if (data.grain !== grain) return [];
+    return buildBoard(data.resources, data.cells, columns, colourBy, projects);
+  }, [data, grain, columns, colourBy, projects]);
+
+  const teams = useMemo(() => {
+    if (!hideIdle) return allTeams;
+    return allTeams.map((t) => ({ ...t, rows: t.rows.filter((r) => r.booked > 0) })).filter((t) => t.rows.length > 0);
+  }, [allTeams, hideIdle]);
 
   const legend = useMemo(() => buildLegend(teams, colourBy, projects, columns), [teams, colourBy, projects, columns]);
   const totals = useMemo(() => columnTotals(teams, columns), [teams, columns]);
   const safeRollColumn = Math.min(rollColumn, Math.max(0, columns.length - 1));
   const roll = useMemo(() => rollCall(teams, safeRollColumn), [teams, safeRollColumn]);
   const travel = useMemo(() => travelLoad(teams, columns), [teams, columns]);
+  const specialties = useMemo(() => specialtyLoad(allTeams, columns, colourBy, projects), [allTeams, columns, colourBy, projects]);
 
   const people = teams.reduce((n, t) => n + t.rows.length, 0);
-  const awayWeeks = teams.reduce((n, t) => n + t.awayWeeks, 0);
+  const away = teams.reduce((n, t) => n + t.away, 0);
   const capacity = totals.reduce((n, c) => n + c.capacity, 0);
   const booked = totals.reduce((n, c) => n + c.booked, 0);
   const destinations = new Set(
@@ -190,8 +208,8 @@ export default function RmtDeploymentClient({ companies, initial }: Props) {
 
   const records: Array<[string, string]> = [
     ['People on the board', String(people)],
-    ['Window', `${span} weeks`],
-    ['Person-weeks away', String(awayWeeks)],
+    ['Window', `${span} ${span === 1 ? 'week' : 'weeks'}`],
+    [`${unit.long.charAt(0).toUpperCase()}${unit.long.slice(1)} away`, String(away)],
     ['Booked of capacity', capacity ? `${Math.round((booked / capacity) * 100)}%` : '—'],
     ['Destinations', String(destinations)],
   ];
@@ -314,22 +332,25 @@ export default function RmtDeploymentClient({ companies, initial }: Props) {
               <div className="avail-control">
                 <span className="avail-control-label">Step</span>
                 <div className="seg" role="group" aria-label="Step">
-                  {(['week', 'month'] as const).map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      className={gran === v ? 'is-active' : undefined}
-                      aria-pressed={gran === v}
-                      disabled={v === 'week' && span > WEEKLY_UP_TO}
-                      title={v === 'week' && span > WEEKLY_UP_TO ? `A ${span}-week board is only readable stepped by month` : undefined}
-                      onClick={() => {
-                        setGran(v);
-                        setRollColumn(0);
-                      }}
-                    >
-                      {v === 'week' ? 'Weeks' : 'Months'}
-                    </button>
-                  ))}
+                  {(['day', 'week', 'month'] as const).map((v) => {
+                    const off = !granAllowed(v, span);
+                    return (
+                      <button
+                        key={v}
+                        type="button"
+                        className={gran === v ? 'is-active' : undefined}
+                        aria-pressed={gran === v}
+                        disabled={off}
+                        title={off ? `A ${span}-week window does not step by ${v}` : undefined}
+                        onClick={() => {
+                          setGran(v);
+                          setRollColumn(0);
+                        }}
+                      >
+                        {v === 'day' ? 'Days' : v === 'week' ? 'Weeks' : 'Months'}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -342,13 +363,15 @@ export default function RmtDeploymentClient({ companies, initial }: Props) {
               columns={columns}
               totals={totals}
               legend={legend}
+              gran={gran}
+              unit={unit}
               colourBy={colourBy}
               onColourBy={setColourBy}
               rollColumn={safeRollColumn}
               onRollColumn={setRollColumn}
               hideIdle={hideIdle}
               onHideIdle={setHideIdle}
-              loading={loading && !data}
+              loading={loading && allTeams.length === 0}
             />
           </section>
 
@@ -357,7 +380,10 @@ export default function RmtDeploymentClient({ companies, initial }: Props) {
               <RollCall groups={roll} column={columns[safeRollColumn]} people={people} />
             </section>
             <section className={cardClass} aria-label="Travel load per team">
-              <TravelLoad teams={travel} awayWeeks={awayWeeks} span={span} />
+              <TravelLoad teams={travel} away={away} span={span} unit={unit} />
+            </section>
+            <section className={cardClass} aria-label="Deployment by specialty">
+              <SpecialtyLoad rows={specialties} unit={unit} colourByPlace={colourBy === 'place'} />
             </section>
           </div>
         </div>
